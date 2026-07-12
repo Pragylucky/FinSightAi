@@ -1,16 +1,77 @@
 # FinSight AI
 
-### AI-Powered Financial Intelligence Platform
+> AI-Powered Financial Intelligence Platform for smarter investment research and financial analysis.
 
-## Project Vision
-
-FinSight AI is an AI-powered financial intelligence platform that helps investors understand companies, stocks, mutual funds, and market trends through conversational AI, intelligent analytics, and personalized financial insights.
-
-Instead of replacing financial advisors, FinSight AI acts as an intelligent research assistant that simplifies complex financial information for everyday investors.
+![React](https://img.shields.io/badge/React-19-blue)
+![Node.js](https://img.shields.io/badge/Node.js-Express-green)
+![MongoDB](https://img.shields.io/badge/Database-MongoDB-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
 
-## Tech Stack
+## 📖 Overview
+
+FinSight AI is a full-stack financial intelligence platform designed to simplify investment research through intuitive dashboards, company analytics, portfolio management, and AI-assisted financial insights.
+
+The platform combines modern web technologies with financial data APIs to provide users with an easy-to-understand view of companies, market trends, and their own investments.
+
+---
+
+## ✨ Features
+
+### 📊 Dashboard
+
+- Personalized dashboard
+- Portfolio overview
+- Market overview
+- Top gainers & losers
+- Financial news
+- Watchlist
+- Recently viewed companies
+
+---
+
+### 📈 Company Analysis
+
+- Search listed companies
+- Live stock information
+- Company financials
+- Revenue & Profit
+- Balance Sheet
+- Quarterly Results
+- Financial Ratios
+- Interactive charts
+- AI-generated company summary
+
+---
+
+### 🤖 AI Assistant
+
+- Explain financial concepts
+- Summarize companies
+- Answer investment-related questions
+- Simplify financial reports using Gemini API
+
+---
+
+### 💼 Portfolio
+
+- Create portfolios
+- Track holdings
+- Profit & Loss
+- Portfolio analytics
+
+---
+
+### ⭐ Watchlist
+
+- Save favourite stocks
+- Quick access to companies
+- Track market movements
+
+---
+
+## 🛠 Tech Stack
 
 ### Frontend
 
@@ -18,300 +79,120 @@ Instead of replacing financial advisors, FinSight AI acts as an intelligent rese
 - TypeScript
 - Tailwind CSS
 - React Router
-- React Query (TanStack Query)
 - Redux Toolkit
-- Framer Motion
-- Chart.js / Recharts
 - Axios
+- Chart.js
 
 ### Backend
 
 - Node.js
 - Express.js
 - JWT Authentication
-- REST API
-- Multer
+- REST APIs
 - Express Validator
-- Nodemailer
 - Bcrypt
+- Nodemailer
 
 ### Database
 
-- PostgreSQL or MongoDB
-- Redis (Caching)
+- MongoDB
 
 ### AI
 
-- OpenAI API or Gemini API
-- Embedding Models
-- Vector Database (Pinecone)
-- LangChain
-- RAG Pipeline
-- Prompt Engineering
-
-### Finance APIs
-
-- Alpha Vantage
-- Finnhub
-- Polygon.io
-- Yahoo Finance
-- News API
-
-### Deployment
-
-- Frontend: Vercel
-- Backend: Render / Railway
-- Database: Supabase / Neon
-- Cloudinary (Images)
-- GitHub Actions (CI/CD)
+- Gemini API
 
 ---
 
-## Authentication
+## 📂 Project Structure
 
-- Email Login
-- Google OAuth
-- Forgot Password
-- Email Verification
-- JWT
-- Refresh Tokens
-- Role Based Authentication
-
----
-
-## Features
-
-### Dashboard
-
-- Personalized dashboard
-- Portfolio Overview
-- Today's Market
-- Top Gainers
-- Top Losers
-- Latest Financial News
-- Watchlist
-- Recently Viewed Companies
-
-### Company Analysis
-
-- Search any listed company
-- Live Stock Price
-- Market Cap
-- PE Ratio
-- PB Ratio
-- Dividend Yield
-- Revenue
-- Profit
-- Cash Flow
-- Balance Sheet
-- Quarterly Results
-- Shareholding Pattern
-- Technical Charts
-- AI Generated Company Summary
-- Pros & Cons
-- Risk Score
-- Investment Outlook
-
-### AI Chat Assistant
-
-Ask anything, for example:
-
-- "Should I invest in TCS?"
-- "Explain Tesla earnings."
-- "What is EBITDA?"
-- "Compare Apple and Microsoft."
-- "Explain this balance sheet."
-- "Summarize this annual report."
-- "Why did the stock fall today?"
-
-AI answers using:
-
-- Live financial data
-- Latest news
-- Historical trends
-- Company reports
-
-### Portfolio
-
-- Create Portfolio
-- Track Returns
-- Profit & Loss
-- Allocation
-- Sector Distribution
-- Risk Analysis
-- Expected Returns
-- Diversification Score
-
-### Watchlist
-
-- Save Stocks
-- Price Alerts
-- News Alerts
-- Dividend Alerts
-- Target Price Alerts
-
-### Financial News
-
-- Latest News
-- AI Summary
-- Sentiment Analysis
-- Bullish/Bearish Score
-- Related Companies
-
-### Mutual Funds
-
-- Compare Funds
-- Expense Ratio
-- Returns
-- Holdings
-- Risk Analysis
-- Fund Rating
-
-### Stock Screener
-
-Filter by:
-
-- PE
-- ROE
-- Debt
-- Market Cap
-- Sector
-- Dividend
-- 52 Week High/Low
-- Growth
-
-### Learning Section
-
-- Finance Dictionary
-- AI Explains Concepts
-- Investment Courses
-- Case Studies
-- Financial Calculators
-
-### Admin Panel
-
-- Manage Users
-- Analytics
-- API Usage
-- Premium Plans
-- Feedback
-- Reports
+```
+FinSight-AI
+│
+├── client/
+│   ├── components/
+│   ├── pages/
+│   ├── hooks/
+│   ├── services/
+│   └── assets/
+│
+├── server/
+│   ├── controllers/
+│   ├── routes/
+│   ├── middleware/
+│   ├── models/
+│   ├── config/
+│   └── utils/
+│
+└── README.md
+```
 
 ---
 
-## AI Features
+## 🔐 Authentication
 
-- Annual Report Summarizer
-- PDF Chat
-- Financial Ratio Explanation
-- News Summarization
-- Portfolio Suggestions
-- Investment Thesis Generator
-- Risk Detection
-- Company Comparison
-- Natural Language Search
-- Recommendation Engine
+- User Registration
+- Login
+- JWT Authentication
+- Protected Routes
+- Password Hashing
 
 ---
 
-## Backend APIs
+## 📸 Screenshots
 
-- Authentication
-- Users
-- Companies
+Coming Soon
+
+- Dashboard
+- Company Analysis
+- AI Assistant
 - Portfolio
 - Watchlist
-- News
-- Chat
-- Reports
-- Analytics
-- Admin
-- Payments
-- Notifications
 
 ---
 
-## Database Tables
+## 🚀 Getting Started
 
-- Users
-- Companies
-- Portfolios
-- Transactions
-- Watchlists
-- Chats
-- Messages
-- Reports
-- Notifications
-- Subscriptions
-- Feedback
-- News
+### Clone Repository
 
----
+```bash
+git clone https://github.com/Pragylucky/FinSight-AI.git
+```
 
-## Advanced Concepts
+### Install Frontend
 
-- REST APIs
-- JWT
-- Authentication
-- Authorization
-- MVC Architecture
-- Repository Pattern
-- Database Relationships
-- Caching
-- Rate Limiting
-- Pagination
-- Filtering
-- Sorting
-- Searching
-- Error Handling
-- Validation
-- Logging
-- File Upload
-- WebSockets
-- Cron Jobs
-- Redis
-- API Optimization
-- Code Splitting
-- Lazy Loading
-- Docker
-- CI/CD
-- Environment Variables
-- Git Workflow
+```bash
+cd client
+npm install
+npm run dev
+```
+
+### Install Backend
+
+```bash
+cd server
+npm install
+npm run dev
+```
 
 ---
 
-## Resume Description
+## 📌 Future Improvements
 
-### FinSight AI — AI-Powered Financial Intelligence Platform
-
-**Founder & Sole Developer**
-
-- Building an AI-powered financial intelligence platform that simplifies investment research through conversational AI and real-time market analytics.
-- Developing a full-stack application using React, Node.js, PostgreSQL, REST APIs, and LLM integration for intelligent financial analysis.
-- Designing features including portfolio tracking, AI-assisted company research, stock screening, financial news summarization, and personalized investment insights.
-- Architecting scalable backend services with authentication, role-based access control, caching, and secure API integrations for financial data.
-- Applying modern software engineering practices including modular architecture, reusable components, responsive UI design, and cloud deployment.
+- Portfolio performance visualization
+- Stock alerts
+- Mutual fund comparison
+- News sentiment analysis
+- Deployment on Vercel & Render
 
 ---
 
-## Skills Demonstrated
+## 👨‍💻 Author
 
-- Full Stack Development
-- React
-- Node.js
-- Express
-- PostgreSQL
-- REST APIs
-- Authentication
-- AI Integration
-- Prompt Engineering
-- Database Design
-- System Design
-- State Management
-- Responsive UI
-- Cloud Deployment
-- Product Thinking
-- Problem Solving
-- Software Architecture
-- Git
-- Agile Development
+**Ronak Singh**
+
+- GitHub: https://github.com/Pragylucky
+- LinkedIn: https://www.linkedin.com/in/ronak-singh-79234328a/
+
+---
+
+### ⭐ If you like this project, consider giving it a star.
