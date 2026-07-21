@@ -190,14 +190,21 @@ FinSightAI
 
 # 📸 Screenshots
 
-> Coming Soon
+| Dashboard | Company Analysis |
+|------------|------------------|
+| ![](assets/dashboard.png) | ![](assets/company-analysis.png) |
 
-- Dashboard
-- Company Analysis
-- AI Assistant
-- Portfolio
-- Watchlist
-- Stock Screener
+| Portfolio | Watchlist |
+|------------|------------|
+| ![](assets/portfolio.png) | ![](assets/watchlist.png) |
+
+| AI Assistant | Financial News |
+|---------------|----------------|
+| ![](assets/ai-chat.png) | ![](assets/financial-news.png) |
+
+| Stock Screener | Learning Hub |
+|-----------------|--------------|
+| ![](assets/screener.png) | ![](assets/learning.png) |
 
 ---
 
