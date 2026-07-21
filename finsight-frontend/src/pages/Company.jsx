@@ -1,6 +1,5 @@
 // Company.jsx
-// Deep dive into a specific company/stock
-// Gets the stock symbol from the URL params (e.g. /company/TCS)
+
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';

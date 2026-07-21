@@ -1,20 +1,5 @@
-// ================================================================
-// src/services/api.js  ← ADD THIS FILE TO YOUR FRONTEND
-// ================================================================
-// Central API client for all backend calls
-// Uses axios with interceptors to auto-attach JWT and auto-refresh
-//
-// HOW TO USE IN ANY COMPONENT:
-//   import api from '../services/api';
-//   const data = await api.auth.login({ email, password });
-//   const portfolio = await api.portfolio.get();
-// ================================================================
-
 import axios from 'axios';
 
-// Your backend URL
-// In dev: http://localhost:5000
-// In prod: your Render/Railway URL
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Create axios instance with default config

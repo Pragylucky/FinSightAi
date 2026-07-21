@@ -1,6 +1,4 @@
 // Auth.jsx — Login and Signup pages in one file
-// When backend is ready, replace the handleSubmit functions with real API calls
-
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Zap, ArrowLeft, Mail, Lock, User, AlertCircle, CheckCircle2 } from 'lucide-react';

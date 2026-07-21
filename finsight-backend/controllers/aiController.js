@@ -5,11 +5,6 @@ const {
   generateCompanySummary,
 } = require('../services/aiService');
 
-// ── POST /api/ai/chat ─────────────────────────────────────────
-// Body: {
-//   messages: [{ role: 'user', content: 'What is PE ratio?' }],
-//   context: optional financial data
-// }
 
 const chatWithAI = async (req, res, next) => {
   try {

@@ -1,6 +1,4 @@
 // Landing.jsx
-// The public homepage — first thing users see before logging in
-// Goal: communicate value quickly and get them to sign up
 
 import { useNavigate } from 'react-router-dom';
 import { Zap, TrendingUp, MessageSquareText, Shield, BarChart3, Newspaper, ArrowRight, Star, ChevronRight } from 'lucide-react';

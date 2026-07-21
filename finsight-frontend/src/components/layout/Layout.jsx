@@ -1,6 +1,4 @@
 // Layout.jsx
-// Wraps all authenticated pages with sidebar + header
-// Think of it as the "shell" of the app
 
 import { useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
