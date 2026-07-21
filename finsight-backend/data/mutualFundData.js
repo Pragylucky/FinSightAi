@@ -1,0 +1,103 @@
+// data/mutualFundData.js
+// Mutual fund scheme list used to fetch live/latest fund data
+
+const mutualFundSchemes = [
+  {
+    id: 'parag-parikh-flexi-cap',
+    name: 'Parag Parikh Flexi Cap Fund - Direct Growth',
+    category: 'Flexi Cap',
+    amc: 'PPFAS Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 1000,
+  },
+  {
+    id: 'hdfc-flexi-cap',
+    name: 'HDFC Flexi Cap Fund - Direct Growth',
+    category: 'Flexi Cap',
+    amc: 'HDFC Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 100,
+  },
+  {
+    id: 'quant-small-cap',
+    name: 'Quant Small Cap Fund - Direct Growth',
+    category: 'Small Cap',
+    amc: 'Quant Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 1000,
+  },
+  {
+    id: 'nippon-small-cap',
+    name: 'Nippon India Small Cap Fund - Direct Growth',
+    category: 'Small Cap',
+    amc: 'Nippon India Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 100,
+  },
+  {
+    id: 'motilal-midcap',
+    name: 'Motilal Oswal Midcap Fund - Direct Growth',
+    category: 'Mid Cap',
+    amc: 'Motilal Oswal Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 500,
+  },
+  {
+    id: 'hdfc-midcap',
+    name: 'HDFC Mid-Cap Opportunities Fund - Direct Growth',
+    category: 'Mid Cap',
+    amc: 'HDFC Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 100,
+  },
+  {
+    id: 'icici-bluechip',
+    name: 'ICICI Prudential Large Cap Fund - Direct Growth',
+    category: 'Large Cap',
+    amc: 'ICICI Prudential Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 100,
+  },
+  {
+    id: 'sbi-bluechip',
+    name: 'SBI Bluechip Fund - Direct Growth',
+    category: 'Large Cap',
+    amc: 'SBI Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 500,
+  },
+  {
+    id: 'axis-elss',
+    name: 'Axis ELSS Tax Saver Fund - Direct Growth',
+    category: 'ELSS',
+    amc: 'Axis Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 500,
+  },
+  {
+    id: 'mirae-elss',
+    name: 'Mirae Asset ELSS Tax Saver Fund - Direct Growth',
+    category: 'ELSS',
+    amc: 'Mirae Asset Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 500,
+  },
+  {
+    id: 'hdfc-balanced-advantage',
+    name: 'HDFC Balanced Advantage Fund - Direct Growth',
+    category: 'Hybrid',
+    amc: 'HDFC Mutual Fund',
+    riskLevel: 'Very High',
+    minSip: 100,
+  },
+  {
+    id: 'sbi-balanced-advantage',
+    name: 'SBI Balanced Advantage Fund - Direct Growth',
+    category: 'Hybrid',
+    amc: 'SBI Mutual Fund',
+    riskLevel: 'High',
+    minSip: 500,
+  },
+];
+
+module.exports = { mutualFundSchemes };
