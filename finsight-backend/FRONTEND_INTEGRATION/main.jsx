@@ -1,8 +1,3 @@
-// ================================================================
-// REPLACE your entire src/main.jsx with this file
-// Change: wraps App in AuthProvider so auth state is global
-// ================================================================
-
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
