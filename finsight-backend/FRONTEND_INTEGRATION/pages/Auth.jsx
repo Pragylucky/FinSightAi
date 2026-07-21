@@ -1,8 +1,3 @@
-// ================================================================
-// REPLACE your entire src/pages/Auth.jsx with this file
-// Changes: handleSubmit now calls real API via useAuth()
-// ================================================================
-
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Zap, ArrowLeft, Mail, Lock, User, AlertCircle, CheckCircle2 } from 'lucide-react';
