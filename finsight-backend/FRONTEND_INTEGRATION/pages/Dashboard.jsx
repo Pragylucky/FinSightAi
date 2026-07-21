@@ -1,8 +1,3 @@
-// ================================================================
-// REPLACE your entire src/pages/Dashboard.jsx with this file
-// Changes: fetches real portfolio, market data, and news from backend
-// ================================================================
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, TrendingDown, BriefcaseBusiness, Star, Bell, BarChart3, ArrowRight } from 'lucide-react';

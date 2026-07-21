@@ -1,9 +1,3 @@
-// ================================================================
-// REPLACE your entire src/pages/Company.jsx with this file
-// Changes: fetches real stock data from backend (Finnhub API)
-//          Falls back to mock data if backend not connected
-// ================================================================
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
