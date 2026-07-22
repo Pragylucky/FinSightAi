@@ -286,6 +286,11 @@ FINNHUB_API_KEY=YOUR_FINNHUB_KEY
 - Dark / Light theme
 
 ---
+🌐 Live Demo:
+https://fin-sight-ai-six-kappa.vercel.app
+
+⚙️ Backend API:
+https://finsight-backend-jlvd.onrender.com
 
 # 👨‍💻 Author
 
