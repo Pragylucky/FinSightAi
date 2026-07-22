@@ -105,14 +105,21 @@ body {
 
 /* Input focus */
 .input-field {
+  width: 100%;
+  height: 48px;
+
   background: #131929;
   border: 1px solid #1E2D45;
-  color: #F0F4FF;
   border-radius: 8px;
-  padding: 10px 14px;
-  width: 100%;
+
+  color: #F0F4FF;
+
+  padding: 0 14px;
+
   outline: none;
-  transition: border-color 0.2s;
+
+  transition: all .2s ease;
+  line-height: 48px;
 }
 .input-field:focus {
   border-color: #00D4FF;
@@ -123,14 +130,20 @@ body {
 }
 
 .input {
+  width: 100%;
+  height: 48px;
+
   background: #131929;
   border: 1px solid #1E2D45;
-  color: #F0F4FF;
   border-radius: 8px;
-  padding: 10px 14px;
-  width: 100%;
+
+  color: #F0F4FF;
+
+  padding: 0 14px;
+
   outline: none;
-  transition: border-color 0.2s;
+
+  transition: all .2s ease;
 }
 
 .input:focus {

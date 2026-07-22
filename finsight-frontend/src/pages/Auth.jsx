@@ -126,11 +126,10 @@ export function Login() {
         )}
 
         <AuthInput
-          label="Email address"
+          label=""
           type="email"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
-          placeholder="you@example.com"
           icon={Mail}
           required
         />
@@ -140,7 +139,6 @@ export function Login() {
           type="password"
           value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })}
-          placeholder="Enter your password"
           icon={Lock}
           required
         />
@@ -267,7 +265,6 @@ export function Signup() {
           type="text"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="User Name"
           icon={User}
           required
         />
@@ -277,7 +274,6 @@ export function Signup() {
           type="email"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
-          placeholder="you@example.com"
           icon={Mail}
           required
         />
@@ -288,7 +284,6 @@ export function Signup() {
             type="password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder="Min 8 characters"
             icon={Lock}
             required
           />
@@ -311,7 +306,6 @@ export function Signup() {
           type="password"
           value={form.confirmPassword}
           onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-          placeholder="Repeat password"
           icon={Lock}
           required
         />

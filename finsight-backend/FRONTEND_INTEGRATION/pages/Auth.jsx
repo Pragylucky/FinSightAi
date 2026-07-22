@@ -12,14 +12,19 @@ function AuthInput({ label, type = 'text', value, onChange, placeholder, icon: I
     <div className="space-y-1.5">
       <label className="text-sm font-medium text-text-secondary">{label}</label>
       <div className="relative">
-        {Icon && <Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />}
-        <input
+          {Icon && (
+            <Icon
+              size={16}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+            />
+          )}        
+          <input
           type={inputType}
           value={value}
           onChange={onChange}
           placeholder={placeholder}
           required={required}
-          className={`input-field ${Icon ? 'pl-9' : ''} ${isPassword ? 'pr-10' : ''}`}
+          className={`input-field ${Icon ? 'pl-11' : ''} ${isPassword ? 'pr-11' : ''}`}
         />
         {isPassword && (
           <button type="button" onClick={() => setShowPass(!showPass)}
@@ -99,12 +104,12 @@ export function Login() {
             <AlertCircle size={16} />{error}
           </div>
         )}
-        <AuthInput label="Email address" type="email" value={form.email}
+        <AuthInput label="" type="email" value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
-          placeholder="you@example.com" icon={Mail} required />
-        <AuthInput label="Password" type="password" value={form.password}
+          placeholder="" icon={Mail} required />
+        <AuthInput label="" type="password" value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })}
-          placeholder="Enter your password" icon={Lock} required />
+          placeholder="" icon={Lock} required />
         <div className="flex items-center justify-end">
           <Link to="/forgot-password" className="text-xs text-accent-cyan hover:underline">Forgot password?</Link>
         </div>
@@ -214,10 +219,10 @@ export function Signup() {
         )}
         <AuthInput label="Full name" type="text" value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="User Name" icon={User} required />
+           icon={User} required />
         <AuthInput label="Email address" type="email" value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
-          placeholder="you@example.com" icon={Mail} required />
+          icon={Mail} required />
         <div className="space-y-1.5">
           <AuthInput label="Password" type="password" value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
