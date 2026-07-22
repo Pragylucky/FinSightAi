@@ -40,20 +40,26 @@ app.use(helmet());
 // CORS — controls which frontend URLs can call this API
 // In development: localhost:3000 (your Vite dev server)
 // In production: your Vercel URL
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://fin-sight-ai-six-kappa.vercel.app',
+].filter(Boolean);
+
 app.use(cors({
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      process.env.CLIENT_URL,
-      'http://localhost:3000',
-      'http://localhost:5173', // Vite default port
-    ].filter(Boolean);
+    // Allow requests without an Origin header (Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
 
-    // Allow requests with no origin (like curl, Postman) in dev
-    if (!origin || process.env.NODE_ENV === 'development') return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.log('Blocked by CORS:', origin);
     callback(new Error('Not allowed by CORS'));
   },
-  credentials: true, // IMPORTANT: allows cookies (refresh tokens) to be sent
+  credentials: true,
 }));
 
 // Morgan logs every HTTP request to the terminal — great for debugging
