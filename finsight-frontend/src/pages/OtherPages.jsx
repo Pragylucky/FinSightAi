@@ -314,23 +314,10 @@ export function News() {
         setLoading(true);
         setError('');
 
-        const token = localStorage.getItem('accessToken');
-
-        const response = await fetch('http://localhost:5000/api/news', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = await response.json();
-
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to fetch news');
-        }
+        const data = await api.news.get();
 
         setNewsItems(data.news || []);
-      } catch (err) {
+      }catch (err) {
         console.error('❌ NEWS FETCH ERROR:', err);
         setError(err.message);
       } finally {
