@@ -436,23 +436,9 @@ export function Screener() {
       try {
         setLoading(true);
 
-        const token = localStorage.getItem('accessToken');
+        const data = await api.screener.get({ limit: 20 });
 
-        const response = await fetch(
-          'http://localhost:5000/api/screener?limit=20',
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data = await response.json();
-
-
-        if (data.success) {
-          setScreenerStocks(data.stocks || []);
-        }
+        setScreenerStocks(data.stocks || []);
       } catch (error) {
         console.error('❌ Screener fetch error:', error);
       } finally {
@@ -609,24 +595,10 @@ export function Funds() {
   const fetchMutualFunds = async () => {
     try {
       setLoading(true);
+      const data = await api.mutualFunds.get();
 
-      const token = localStorage.getItem('accessToken');
-
-      const response = await fetch(
-        'http://localhost:5000/api/mutual-funds',
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-
-      if (data.success) {
-        setMutualFunds(data.funds || []);
-      }
+      setMutualFunds(data.funds || []);
+      
     } catch (error) {
       console.error(
         '❌ Mutual fund fetch error:',
