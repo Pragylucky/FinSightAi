@@ -24,5 +24,8 @@ export default function useApi(fn, { allow404 = false } = {}) {
     setTick((t) => t + 1);
   }, []);
 
-  return { ...state, reload };
+  // Re-fetch without flashing the loading state (used for background polling)
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
+
+  return { ...state, reload, refresh };
 }

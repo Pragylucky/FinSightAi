@@ -5,6 +5,7 @@ import { Newspaper } from 'lucide-react';
 import { Card, SectionHeader, Badge, Chips, EmptyState, ErrorNotice, LoadingSkeleton } from '../components/ui';
 import { Stagger, Item } from '../components/motion';
 import useApi from '../lib/useApi';
+import { timeAgo } from '../lib/format';
 import api from '../services/api';
 
 const fetchNews = () => api.news.get();
@@ -21,7 +22,7 @@ export default function News() {
 
   return (
     <div className="space-y-5">
-      <SectionHeader title="Financial news" subtitle="Market headlines with a sentiment read" />
+      <SectionHeader title="Financial news" subtitle="Latest market headlines, with sentiment estimated from the wording" />
 
       {categories.length > 2 && <Chips options={categories.map((c) => ({ value: c, label: c }))} value={filter} onChange={setFilter} />}
 
@@ -43,7 +44,7 @@ export default function News() {
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         {item.sentiment && <Badge variant={sentimentVariant[item.sentiment] || 'default'} className="capitalize">{item.sentiment}</Badge>}
                         {item.category && <Badge>{item.category}</Badge>}
-                        <span className="text-xs text-text-muted">{item.source}{item.time ? ` · ${item.time}` : ''}</span>
+                        <span className="text-xs text-text-muted">{item.source}{item.time ? ` · ${timeAgo(item.time)}` : ''}</span>
                       </div>
                       {item.url ? (
                         <a href={item.url} target="_blank" rel="noopener noreferrer" className="block font-semibold text-text-primary mb-2 leading-snug hover:text-accent-primary transition-colors">{item.title}</a>
@@ -54,7 +55,7 @@ export default function News() {
                       {item.relatedStocks?.length > 0 && (
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
                           <span className="text-xs text-text-muted">Related:</span>
-                          {item.relatedStocks.map((s) => <Badge key={s} variant="primary">{s}</Badge>)}
+                          {item.relatedStocks.map((s, i) => <Badge key={`${s}-${i}`} variant="primary">{s}</Badge>)}
                         </div>
                       )}
                     </div>

@@ -1,603 +1,448 @@
 // services/financeService.js
-// All external finance API calls live here
-// Using Finnhub (free tier: 60 calls/min) as primary
-// Alpha Vantage as fallback for some data
+// All market-data calls live here. Source: Yahoo Finance (no API key needed).
+// Optional: FINNHUB_API_KEY adds extra general market headlines.
 //
-// Free API keys:
-// Finnhub:       https://finnhub.io  (no credit card needed)
-// Alpha Vantage: https://www.alphavantage.co (no credit card needed)
+// Principles
+//  - Never invent data. If Yahoo fails we serve the last good (stale) value, otherwise throw.
+//  - Yahoo's response schema changes often; `validateResult: false` stops one odd field from
+//    failing a whole request (that used to make some stocks show no metrics at all).
 
 const axios = require('axios');
 const YahooFinance = require('yahoo-finance2').default;
-const yahooFinance = new YahooFinance();
+const { AppError } = require('../middleware/errorHandler');
+const { screenerStocks, usStocks, symbolAliases } = require('../data/screenerData');
+
+const yahooFinance = new YahooFinance({
+  suppressNotices: ['yahooSurvey'],
+  validation: { logErrors: false },
+});
+const LOOSE = { validateResult: false };
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
-const AV_BASE = 'https://www.alphavantage.co/query';
+const US_SYMBOLS = new Set(usStocks.map((s) => s.symbol));
 
-// Simple in-memory cache to avoid hitting rate limits
-// Key = 'PRICE:TCS', Value = { data: {...}, expiresAt: timestamp }
+// ── Cache with stale fallback ─────────────────────────────────
+// fresh for `ttl`, but kept for 24h so a Yahoo outage doesn't blank the app
 const cache = new Map();
+const STALE_MS = 24 * 60 * 60 * 1000;
 
 const getCached = (key) => {
-  const cached = cache.get(key);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
-  }
-  return null;
+  const hit = cache.get(key);
+  return hit && Date.now() < hit.expiresAt ? hit.data : null;
 };
-
+const getStale = (key) => {
+  const hit = cache.get(key);
+  return hit && Date.now() < hit.staleUntil ? hit.data : null;
+};
 const setCache = (key, data, ttlSeconds = 60) => {
-  cache.set(key, {
-    data,
-    expiresAt: Date.now() + ttlSeconds * 1000,
-  });
+  cache.set(key, { data, expiresAt: Date.now() + ttlSeconds * 1000, staleUntil: Date.now() + STALE_MS });
 };
 
-// ── Get real-time stock quote ─────────────────────────────────
-// Finnhub: GET /quote?symbol=TCS.NS&token=KEY
-// Indian stocks: append .NS for NSE, .BO for BSE
-// US stocks: just the symbol (AAPL, TSLA)
+// ── Symbol helpers ────────────────────────────────────────────
+// TCS -> TCS.NS, AAPL -> AAPL, ZOMATO -> ETERNAL.NS (renamed), ^NSEI stays as-is
+const toYahooSymbol = (symbol) => {
+  const s = String(symbol || '').toUpperCase().trim();
+  if (s.startsWith('^') || s.includes('=') || s.includes('.')) return s;
+  const clean = symbolAliases[s] || s;
+  return US_SYMBOLS.has(clean) ? clean : `${clean}.NS`;
+};
+
+const toISO = (v) => {
+  if (!v) return new Date().toISOString();
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === 'number') return new Date(v < 1e12 ? v * 1000 : v).toISOString();
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+};
+
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+// ── Live quote ────────────────────────────────────────────────
 const getStockQuote = async (symbol) => {
   const cacheKey = `QUOTE:${symbol}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  const fresh = getCached(cacheKey);
+  if (fresh) return fresh;
 
-  // Indian NSE stocks use .NS on Yahoo Finance
-  // US stocks can be passed without a suffix
-  const usStocks = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'NVDA'];
-
-  const yahooSymbol = symbol.includes('.')
-    ? symbol
-    : usStocks.includes(symbol)
-      ? symbol
-      : `${symbol}.NS`;
+  const yahooSymbol = toYahooSymbol(symbol);
 
   try {
     const response = await axios.get(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`,
-      {
-        params: {
-          interval: '1d',
-          range: '5d',
-        },
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-        },
-      }
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`,
+      { params: { interval: '1d', range: '5d' }, timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
 
-    const result = response.data?.chart?.result?.[0];
+    const meta = response.data?.chart?.result?.[0]?.meta;
+    if (!meta) throw new Error('No data returned from Yahoo Finance');
 
-    if (!result) {
-      throw new Error('No data returned from Yahoo Finance');
-    }
+    const price = meta.regularMarketPrice ?? meta.chartPreviousClose;
+    if (!price) throw new Error('No valid price returned');
 
-    const meta = result.meta;
-
-    const price =
-      meta.regularMarketPrice ??
-      meta.chartPreviousClose;
-
-    const prevClose =
-      meta.previousClose ??
-      meta.chartPreviousClose;
-
-    if (!price) {
-      throw new Error('No valid price returned from Yahoo Finance');
-    }
-
-    const change = prevClose
-      ? price - prevClose
-      : 0;
-
-    const changePercent = prevClose
-      ? (change / prevClose) * 100
-      : 0;
+    const prevClose = meta.previousClose ?? meta.chartPreviousClose;
+    const change = prevClose ? price - prevClose : 0;
 
     const data = {
       symbol,
       price,
       change,
-      changePercent,
+      changePercent: prevClose ? (change / prevClose) * 100 : 0,
       high: meta.regularMarketDayHigh || price,
       low: meta.regularMarketDayLow || price,
       open: meta.regularMarketOpen || price,
       prevClose,
+      volume: meta.regularMarketVolume || null,
       currency: meta.currency || 'INR',
       exchange: meta.exchangeName || 'NSE',
-      isMock: false,
     };
-
-    console.log(`✅ Yahoo Finance quote fetched for ${yahooSymbol}:`, data);
 
     setCache(cacheKey, data, 60);
-
     return data;
-
   } catch (error) {
-    console.error(
-      `❌ Yahoo Finance quote error for ${yahooSymbol}:`,
-      error.message
-    );
-
-    // Keep mock fallback temporarily while developing
-    return getMockQuote(symbol);
+    console.error(`Quote error for ${yahooSymbol}:`, error.message);
+    const stale = getStale(cacheKey);
+    if (stale) return stale;
+    throw new AppError(`Live price for ${symbol} is unavailable right now.`, 502);
   }
 };
 
-// ── Get company profile ───────────────────────────────────────
+// ── Company profile (key metrics) ─────────────────────────────
+const buildProfile = (symbol, { price = {}, summary = {}, stats = {}, financial = {}, profile = {} }) => ({
+  symbol,
+  name: price.longName || price.shortName || symbol,
+  sector: profile.sector || 'Unknown',
+  industry: profile.industry || 'Unknown',
+  website: profile.website || '',
+  description: profile.longBusinessSummary || '',
+  employees: profile.fullTimeEmployees || 0,
+
+  marketCap: num(price.marketCap),
+  pe: num(summary.trailingPE),
+  forwardPE: num(summary.forwardPE),
+  pb: num(stats.priceToBook),
+  eps: num(stats.trailingEps),
+
+  roe: num(financial.returnOnEquity) != null ? financial.returnOnEquity * 100 : null,
+  netMargin: num(financial.profitMargins) != null ? financial.profitMargins * 100 : null,
+  revenueGrowth: num(financial.revenueGrowth) != null ? financial.revenueGrowth * 100 : null,
+  // Yahoo reports D/E as a percentage (9.83 = 0.098x); the UI shows the ratio
+  debtToEquity: num(financial.debtToEquity) != null ? financial.debtToEquity / 100 : null,
+
+  dividendYield: num(summary.dividendYield) != null ? summary.dividendYield * 100 : null,
+  week52High: num(summary.fiftyTwoWeekHigh),
+  week52Low: num(summary.fiftyTwoWeekLow),
+  revenue: num(financial.totalRevenue),
+  currency: price.currency || 'INR',
+});
+
 const getCompanyProfile = async (symbol) => {
   const cacheKey = `PROFILE:${symbol}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  const fresh = getCached(cacheKey);
+  if (fresh) return fresh;
 
-  const usStocks = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'NVDA'];
-
-  const yahooSymbol = symbol.includes('.')
-    ? symbol
-    : usStocks.includes(symbol)
-      ? symbol
-      : `${symbol}.NS`;
+  const yahooSymbol = toYahooSymbol(symbol);
 
   try {
-    const result = await yahooFinance.quoteSummary(yahooSymbol, {
-      modules: [
-        'price',
-        'summaryDetail',
-        'defaultKeyStatistics',
-        'financialData',
-        'assetProfile',
-      ],
+    const result = await yahooFinance.quoteSummary(
+      yahooSymbol,
+      { modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'financialData', 'assetProfile'] },
+      LOOSE
+    );
+    const data = buildProfile(symbol, {
+      price: result.price, summary: result.summaryDetail, stats: result.defaultKeyStatistics,
+      financial: result.financialData, profile: result.assetProfile,
     });
-
-    const price = result.price || {};
-    const summary = result.summaryDetail || {};
-    const stats = result.defaultKeyStatistics || {};
-    const financial = result.financialData || {};
-    const profile = result.assetProfile || {};
-
-    const data = {
-      symbol,
-
-      // Basic company information
-      name: price.longName || price.shortName || symbol,
-      sector: profile.sector || 'Unknown',
-      industry: profile.industry || 'Unknown',
-      website: profile.website || '',
-      description: profile.longBusinessSummary || '',
-      employees: profile.fullTimeEmployees || 0,
-
-      // Valuation
-      marketCap: price.marketCap || 0,
-      pe: summary.trailingPE || 0,
-      forwardPE: summary.forwardPE || 0,
-      pb: stats.priceToBook || 0,
-      eps: stats.trailingEps || 0,
-
-      // Financial performance
-      roe: financial.returnOnEquity
-        ? financial.returnOnEquity * 100
-        : 0,
-
-      netMargin: financial.profitMargins
-        ? financial.profitMargins * 100
-        : 0,
-
-      revenueGrowth: financial.revenueGrowth
-        ? financial.revenueGrowth * 100
-        : 0,
-
-      debtToEquity: financial.debtToEquity || 0,
-
-      // Dividend
-      dividendYield: summary.dividendYield
-        ? summary.dividendYield * 100
-        : 0,
-
-      // 52-week range
-      week52High: summary.fiftyTwoWeekHigh || 0,
-      week52Low: summary.fiftyTwoWeekLow || 0,
-
-      // Revenue
-      revenue: financial.totalRevenue || 0,
-
-      currency: price.currency || 'INR',
-    };
-
-    console.log(
-      `✅ Yahoo Finance profile fetched for ${yahooSymbol}:`,
-      data
-    );
-
     setCache(cacheKey, data, 3600);
-
     return data;
-
   } catch (error) {
-    console.error(
-      `❌ Yahoo Finance profile error for ${yahooSymbol}:`,
-      error.message
-    );
+    console.error(`Profile error for ${yahooSymbol}:`, error.message);
+  }
 
-    return null;
+  // quoteSummary failed (Yahoo hiccup / unusual symbol): fall back to the lighter quote endpoint
+  try {
+    const q = await yahooFinance.quote(yahooSymbol, {}, LOOSE);
+    if (!q) throw new Error('empty quote');
+    const data = buildProfile(symbol, {
+      price: { longName: q.longName, shortName: q.shortName, marketCap: q.marketCap, currency: q.currency },
+      summary: {
+        trailingPE: q.trailingPE, forwardPE: q.forwardPE, fiftyTwoWeekHigh: q.fiftyTwoWeekHigh, fiftyTwoWeekLow: q.fiftyTwoWeekLow,
+        dividendYield: q.dividendYield != null ? q.dividendYield / 100 : undefined,
+      },
+      stats: { priceToBook: q.priceToBook, trailingEps: q.epsTrailingTwelveMonths },
+    });
+    setCache(cacheKey, data, 600);
+    return data;
+  } catch (error) {
+    console.error(`Profile fallback error for ${yahooSymbol}:`, error.message);
+    return getStale(cacheKey);
   }
 };
 
-// ── Get historical price data for charts ─────────────────────
-// Finnhub candles: /stock/candle?symbol=...&resolution=D&from=...&to=...
+// ── Price history for charts ──────────────────────────────────
 const getHistoricalData = async (symbol, days = 30) => {
   const cacheKey = `HISTORY:${symbol}:${days}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  const fresh = getCached(cacheKey);
+  if (fresh) return fresh;
 
-  // US stocks don't need a suffix.
-  // Indian NSE stocks use .NS on Yahoo Finance.
-  const usStocks = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'NVDA'];
-
-  const yahooSymbol = symbol.includes('.')
-    ? symbol
-    : usStocks.includes(symbol)
-      ? symbol
-      : `${symbol}.NS`;
-
-  // Choose enough Yahoo history for the requested number of days
-  let range = '1mo';
-
-  if (days <= 7) {
-    range = '5d';
-  } else if (days <= 30) {
-    range = '1mo';
-  } else if (days <= 90) {
-    range = '3mo';
-  } else if (days <= 180) {
-    range = '6mo';
-  } else {
-    range = '1y';
-  }
+  const yahooSymbol = toYahooSymbol(symbol);
+  const range = days <= 7 ? '5d' : days <= 30 ? '1mo' : days <= 90 ? '3mo' : days <= 180 ? '6mo' : '1y';
 
   try {
     const response = await axios.get(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`,
-      {
-        params: {
-          interval: '1d',
-          range,
-        },
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-        },
-      }
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`,
+      { params: { interval: '1d', range }, timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
 
     const result = response.data?.chart?.result?.[0];
-
-    if (!result) {
-      throw new Error('No historical data returned from Yahoo Finance');
-    }
-
-    const timestamps = result.timestamp || [];
-    const quote = result.indicators?.quote?.[0];
-
-    if (!quote || timestamps.length === 0) {
-      throw new Error('Invalid historical data returned from Yahoo Finance');
-    }
+    const timestamps = result?.timestamp || [];
+    const quote = result?.indicators?.quote?.[0];
+    if (!quote || timestamps.length === 0) throw new Error('No historical data returned');
 
     const data = timestamps
-      .map((timestamp, i) => ({
-        date: new Date(timestamp * 1000).toLocaleDateString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-        }),
+      .map((t, i) => ({
+        date: new Date(t * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
         price: quote.close?.[i],
         open: quote.open?.[i],
         high: quote.high?.[i],
         low: quote.low?.[i],
         volume: quote.volume?.[i],
       }))
-      // Yahoo can occasionally return null candles
-      .filter(item => item.price != null)
-      // Keep approximately the number of days requested
+      .filter((item) => item.price != null)
       .slice(-days);
 
-    if (data.length === 0) {
-      throw new Error('No valid historical candles found');
-    }
-
-    console.log(
-      `✅ Yahoo Finance history fetched for ${yahooSymbol}: ${data.length} candles`
-    );
+    if (data.length === 0) throw new Error('No valid candles');
 
     setCache(cacheKey, data, 3600);
-
     return data;
-
   } catch (error) {
-    console.error(
-      `❌ Yahoo Finance historical data error for ${yahooSymbol}:`,
-      error.message
-    );
-
-    // Temporary fallback during development
-    return generateMockHistory(symbol, days);
+    console.error(`History error for ${yahooSymbol}:`, error.message);
+    const stale = getStale(cacheKey);
+    if (stale) return stale;
+    throw new AppError(`Price history for ${symbol} is unavailable right now.`, 502);
   }
 };
 
-// ── Get financial news ────────────────────────────────────────
-const getMarketNews = async (category = 'general') => {
-  const cacheKey = `NEWS:${category}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+// ── News ──────────────────────────────────────────────────────
+// Headline sentiment from wording. Cheap and key-free; it's an estimate, not AI.
+const POSITIVE = ['surge', 'rally', 'gain', 'jump', 'soar', 'rise', 'rises', 'record high', 'beat', 'profit', 'growth', 'upgrade', 'bullish', 'strong', 'boost', 'rebound', 'recover', 'climb', 'higher', 'wins', 'approval', 'expands', 'optimism'];
+const NEGATIVE = ['fall', 'falls', 'drop', 'slump', 'plunge', 'crash', 'loss', 'decline', 'miss', 'downgrade', 'bearish', 'weak', 'sell-off', 'selloff', 'lower', 'tumble', 'slide', 'fear', 'concern', 'probe', 'fraud', 'ban', 'cuts', 'layoff', 'warning', 'penalty'];
 
-  try {
-    const response = await axios.get(`${FINNHUB_BASE}/news`, {
-      params: {
-        category: 'general',
-        token: process.env.FINNHUB_API_KEY,
-      },
-      timeout: 5000,
-    });
-
-    // Keywords used to identify finance/business-related articles
-    const financeKeywords = [
-      'stock',
-      'stocks',
-      'market',
-      'markets',
-      'shares',
-      'earnings',
-      'revenue',
-      'profit',
-      'investor',
-      'investment',
-      'investing',
-      'ipo',
-      'bank',
-      'banking',
-      'interest rate',
-      'inflation',
-      'economy',
-      'economic',
-      'finance',
-      'financial',
-      'nifty',
-      'sensex',
-      'nse',
-      'bse',
-      'rbi',
-      'fed',
-      'nasdaq',
-      'dow',
-      's&p',
-      'dividend',
-      'valuation',
-      'merger',
-      'acquisition',
-      'quarter',
-      'oil price',
-      'gold price',
-      'currency',
-      'forex',
-    ];
-
-    const filteredNews = response.data.filter(article => {
-      const text = `${article.headline || ''} ${article.summary || ''}`.toLowerCase();
-
-      return financeKeywords.some(keyword =>
-        text.includes(keyword.toLowerCase())
-      );
-    });
-
-    const data = filteredNews.slice(0, 20).map(article => ({
-      id: article.id,
-      title: article.headline,
-      summary: article.summary,
-      source: article.source,
-      url: article.url,
-      image: article.image,
-      time: new Date(article.datetime * 1000).toISOString(),
-      related: article.related,
-      category: article.category,
-    }));
-
-    setCache(cacheKey, data, 600);
-
-    return data;
-  } catch (error) {
-    console.error('News fetch error:', error.message);
-    return [];
-  }
-};;
-
-// ── Get company-specific news ─────────────────────────────────
-const getCompanyNews = async (symbol) => {
-  const cacheKey = `CNEWS:${symbol}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  const companyNames = {
-    TCS: 'Tata Consultancy Services',
-    INFY: 'Infosys',
-    RELIANCE: 'Reliance Industries',
-    HDFCBANK: 'HDFC Bank',
-    ICICIBANK: 'ICICI Bank',
-    SBIN: 'State Bank of India',
-    WIPRO: 'Wipro',
-    BAJFINANCE: 'Bajaj Finance',
-    LT: 'Larsen & Toubro',
-
-    AAPL: 'Apple',
-    MSFT: 'Microsoft',
-    GOOGL: 'Alphabet Google',
-    TSLA: 'Tesla',
-    AMZN: 'Amazon',
-    META: 'Meta Platforms',
-    NVDA: 'Nvidia',
+const scoreSentiment = (text) => {
+  const t = ` ${text.toLowerCase()} `;
+  const count = (words) => words.reduce((n, w) => n + (new RegExp(`\\b${w.replace('-', '[- ]?')}\\b`).test(t) ? 1 : 0), 0);
+  const pos = count(POSITIVE);
+  const neg = count(NEGATIVE);
+  const bullishScore = Math.round((100 * (pos + 1)) / (pos + neg + 2));
+  return {
+    sentiment: bullishScore >= 60 ? 'bullish' : bullishScore <= 40 ? 'bearish' : 'neutral',
+    bullishScore,
+    bearishScore: 100 - bullishScore,
   };
+};
 
-  // Remove .NS if symbol already contains it
-  const cleanSymbol = symbol
-    .replace('.NS', '')
-    .replace('.BO', '')
-    .toUpperCase();
-
-  // Search Yahoo using company name instead of ticker
-  const searchQuery = companyNames[cleanSymbol] || cleanSymbol;
-
-  try {
-    console.log(
-      `🔍 Searching Yahoo Finance news for: ${searchQuery}`
-    );
-
-    const result = await yahooFinance.search(searchQuery, {
-      newsCount: 20,
-      quotesCount: 0,
-    });
-
-    const news = result.news || [];
-
-    // Filter results so unrelated Yahoo articles don't appear
-    const companyKeywords = searchQuery
-      .toLowerCase()
-      .split(' ')
-      .filter(word => word.length > 3);
-
-   const filteredNews = news.filter(article => {
-  const text = `${article.title || ''} ${article.summary || ''}`.toLowerCase();
-
-  // For TCS, accept either full company name or ticker
-  return (
-    text.includes(searchQuery.toLowerCase()) ||
-    text.includes(cleanSymbol.toLowerCase())
-  );
+const mapYahooNews = (article, category = 'business') => ({
+  id: article.uuid || article.link,
+  title: article.title || 'Untitled',
+  summary: article.summary || '',
+  source: article.publisher || 'Yahoo Finance',
+  url: article.link || '',
+  time: toISO(article.providerPublishTime),
+  category,
+  relatedStocks: (article.relatedTickers || [])
+    .filter((t) => !t.startsWith('^') && !t.includes('='))          // drop indices and commodities
+    .map((t) => t.replace(/\.(NS|BO)$/, ''))
+    .filter((t) => !/^\d+$/.test(t))                                // drop bare BSE codes
+    .filter((t, i, all) => all.indexOf(t) === i)                    // NSE + BSE listings collapse to one ticker
+    .slice(0, 4),
 });
 
-   console.log('📰 Yahoo raw news:', news.map(n => n.title));
-    console.log('📰 Filtered news:', filteredNews.map(n => n.title));
+const getMarketNews = async () => {
+  const cacheKey = 'NEWS:market';
+  const fresh = getCached(cacheKey);
+  if (fresh) return fresh;
 
-    const data = filteredNews.slice(0, 10).map((article, index) => ({
-  id: article.uuid || `${cleanSymbol}-${index}`,
+  const collected = [];
 
-  title: article.title || 'Untitled',
+  // Primary: Yahoo headlines about the Indian market (no key needed)
+  // Yahoo's news search only matches short queries; long phrases return nothing
+  const queries = ['Sensex', 'Nifty 50', 'Indian stocks'];
+  const yahoo = await Promise.allSettled(
+    queries.map((q) => yahooFinance.search(q, { newsCount: 15, quotesCount: 0 }, LOOSE))
+  );
+  yahoo.forEach((r) => {
+    if (r.status === 'fulfilled') (r.value.news || []).forEach((a) => collected.push(mapYahooNews(a)));
+    else console.error('Yahoo news error:', r.reason?.message);
+  });
 
-  summary: article.summary || '',
+  // Optional extra: Finnhub general headlines, if a key is configured
+  if (process.env.FINNHUB_API_KEY) {
+    try {
+      const { data } = await axios.get(`${FINNHUB_BASE}/news`, {
+        params: { category: 'general', token: process.env.FINNHUB_API_KEY },
+        timeout: 5000,
+      });
+      (data || []).slice(0, 15).forEach((a) =>
+        collected.push({
+          id: String(a.id),
+          title: a.headline,
+          summary: a.summary || '',
+          source: a.source,
+          url: a.url,
+          time: toISO(a.datetime),
+          category: 'global',
+          relatedStocks: a.related ? a.related.split(',').slice(0, 4) : [],
+        })
+      );
+    } catch (error) {
+      console.error('Finnhub news error:', error.message);
+    }
+  }
 
-  source: article.publisher || 'Yahoo Finance',
+  const seen = new Set();
+  const data = collected
+    .filter((a) => a.title && a.url && !seen.has(a.title.toLowerCase()) && seen.add(a.title.toLowerCase()))
+    .sort((a, b) => new Date(b.time) - new Date(a.time))
+    .slice(0, 24)
+    .map((a) => ({ ...a, ...scoreSentiment(`${a.title} ${a.summary}`) }));
 
-  url: article.link || '',
-
-  time: article.providerPublishTime
-    ? new Date(article.providerPublishTime * 1000).toISOString()
-    : new Date().toISOString(),
-
-  thumbnail:
-    article.thumbnail?.resolutions?.[0]?.url || '',
-}));
-
-    console.log(
-      `✅ Yahoo Finance news fetched for ${searchQuery}: ${data.length} relevant articles`
-    );
-
+  if (data.length) {
     setCache(cacheKey, data, 600);
-
     return data;
-  } catch (error) {
-    console.error(
-      `❌ Yahoo Finance news error for ${searchQuery}:`,
-      error.message
-    );
-
-    return [];
   }
+  return getStale(cacheKey) || [];
 };
 
-// ── Mock data fallbacks ───────────────────────────────────────
-// These kick in when the real API fails (rate limit, network, etc.)
-// Prevents the frontend from breaking during development
+const getCompanyNews = async (symbol) => {
+  const cacheKey = `CNEWS:${symbol}`;
+  const fresh = getCached(cacheKey);
+  if (fresh) return fresh;
 
-const getMockQuote = (symbol) => {
-  const prices = { TCS: 3842, INFY: 1456, RELIANCE: 2891, HDFC: 1678, WIPRO: 456, BAJFIN: 7234 };
-  const basePrice = prices[symbol] || 1000;
-  const change = (Math.random() - 0.5) * basePrice * 0.03;
-  return {
-    symbol,
-    price: basePrice + change,
-    change,
-    changePercent: (change / basePrice) * 100,
-    high: basePrice * 1.02,
-    low: basePrice * 0.98,
-    open: basePrice * 0.999,
-    prevClose: basePrice,
-    isMock: true, // Flag so you know it's not real data
-  };
-};
+  const clean = String(symbol).replace(/\.(NS|BO)$/i, '').toUpperCase();
+  const resolved = symbolAliases[clean] || clean;
+  const known = screenerStocks.find((s) => s.symbol === resolved) || usStocks.find((s) => s.symbol === resolved);
+  const fullName = known?.name || resolved;
 
-const generateMockHistory = (symbol, days) => {
-  const prices = { TCS: 3842, INFY: 1456, RELIANCE: 2891, HDFC: 1678 };
-  let price = prices[symbol] || 1000;
-  const data = [];
-
-  for (let i = days; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    price += (Math.random() - 0.48) * price * 0.02;
-    data.push({
-      date: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-      price: parseFloat(price.toFixed(2)),
-      volume: Math.floor(Math.random() * 5000000),
-    });
-  }
-  return data;
-};
-// ── Get quarterly financial results ───────────────────────────
-const getQuarterlyFinancials = async (symbol) => {
-  // Convert TCS → TCS.NS for Yahoo Finance
-  // If symbol already has .NS/.BO etc., leave it unchanged
-  const yahooSymbol = symbol.includes('.') ? symbol : `${symbol}.NS`;
+  // "Eternal (Zomato)" -> search "Eternal", "Zomato" and the ticker itself
+  const base = fullName.replace(/\s*\(.*?\)/g, '').trim();
+  const alt = (fullName.match(/\(([^)]+)\)/) || [])[1];
+  const queries = [...new Set([base, alt, resolved].filter(Boolean))];
 
   try {
-    // Fetch quarterly financial data from Yahoo Finance
-    const result = await yahooFinance.fundamentalsTimeSeries(yahooSymbol, {
-      period1: new Date(
-        Date.now() - 2 * 365 * 24 * 60 * 60 * 1000
-      ),
-      type: 'quarterly',
-      module: 'financials',
-    });
-
-    console.log(
-      `✅ Quarterly financials fetched for ${yahooSymbol}:`,
-      result
+    const results = await Promise.allSettled(
+      queries.map((q) => yahooFinance.search(q, { newsCount: 15, quotesCount: 0 }, LOOSE))
     );
 
-    const formattedResults = result
-  .slice(-4)
-  .reverse()
-  .map((item) => ({
-    date: item.date,
-    revenue: item.totalRevenue || 0,
-    netIncome: item.netIncome || 0,
-    operatingIncome: item.operatingIncome || 0,
-    ebitda: item.EBITDA || 0,
-  }));
+    // Accept an article if Yahoo tags it with this ticker, or its text names the company
+    // (single short words like "Eternal" must be tagged, otherwise unrelated stories slip in)
+    const nameIsSpecific = base.includes(' ') || base.length >= 8;
+    const isRelevant = (a) => {
+      const related = (a.relatedTickers || []).some((t) => t.toUpperCase().replace(/\.(NS|BO)$/, '') === resolved);
+      const text = `${a.title || ''} ${a.summary || ''}`.toLowerCase();
+      return related || (nameIsSpecific && text.includes(base.toLowerCase()));
+    };
 
-return formattedResults;
+    const seen = new Set();
+    const data = results
+      .flatMap((r) => (r.status === 'fulfilled' ? r.value.news || [] : []))
+      .filter((a) => a.title && isRelevant(a) && !seen.has(a.title) && seen.add(a.title))
+      .sort((a, b) => new Date(toISO(b.providerPublishTime)) - new Date(toISO(a.providerPublishTime)))
+      .slice(0, 10)
+      .map((a) => mapYahooNews(a, 'company'));
+
+    setCache(cacheKey, data, 600);
+    return data;
   } catch (error) {
-    console.error(
-      `❌ Quarterly financials error for ${yahooSymbol}:`,
-      error.message
-    );
-
-    return [];
+    console.error(`Company news error for ${fullName}:`, error.message);
+    return getStale(cacheKey) || [];
   }
 };
+
+// ── Quarterly results ─────────────────────────────────────────
+const getQuarterlyFinancials = async (symbol) => {
+  const cacheKey = `QFIN:${symbol}`;
+  const fresh = getCached(cacheKey);
+  if (fresh) return fresh;
+
+  try {
+    const result = await yahooFinance.fundamentalsTimeSeries(
+      toYahooSymbol(symbol),
+      { period1: new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000), type: 'quarterly', module: 'financials' },
+      LOOSE
+    );
+
+    // newest first. Five rows so the UI can compute growth for the latest four.
+    const data = result
+      .filter((r) => r.date && (r.totalRevenue || r.netIncome))
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5)
+      .map((r) => ({
+        date: toISO(r.date),
+        revenue: r.totalRevenue || 0,
+        netIncome: r.netIncome || 0,
+        operatingIncome: r.operatingIncome || 0,
+        ebitda: r.EBITDA || 0,
+      }));
+
+    setCache(cacheKey, data, 6 * 3600);
+    return data;
+  } catch (error) {
+    console.error(`Quarterly financials error for ${symbol}:`, error.message);
+    return getStale(cacheKey) || [];
+  }
+};
+
+// ── Symbol search ─────────────────────────────────────────────
+// Searches our ~100-stock universe + a few US names first, then asks Yahoo for any other NSE company.
+const searchSymbols = async (q) => {
+  const query = String(q || '').trim().toLowerCase();
+  if (!query) return [];
+
+  const aliasTarget = symbolAliases[query.toUpperCase()];
+  const pool = [
+    ...screenerStocks.map((s) => ({ symbol: s.symbol, name: s.name, exchange: 'NSE', sector: s.sector })),
+    ...usStocks,
+  ];
+
+  const rank = (s) => {
+    const sym = s.symbol.toLowerCase();
+    const name = s.name.toLowerCase();
+    if (sym === query || s.symbol === aliasTarget) return 0;
+    if (sym.startsWith(query)) return 1;
+    if (name.startsWith(query)) return 2;
+    if (name.includes(query) || sym.includes(query)) return 3;
+    return 99;
+  };
+
+  const local = pool.map((s) => ({ s, r: rank(s) })).filter((x) => x.r < 99).sort((a, b) => a.r - b.r).map((x) => x.s).slice(0, 8);
+  if (local.length >= 5 || query.length < 2) return local;
+
+  // Not enough local matches: ask Yahoo for other NSE-listed equities
+  const cacheKey = `SEARCH:${query}`;
+  let remote = getCached(cacheKey);
+  if (!remote) {
+    try {
+      const r = await yahooFinance.search(query, { quotesCount: 8, newsCount: 0 }, LOOSE);
+      remote = (r.quotes || [])
+        .filter((x) => x.symbol && x.quoteType === 'EQUITY' && x.exchange === 'NSI' && /\.NS$/.test(x.symbol) && !/-/.test(x.symbol))
+        .map((x) => ({ symbol: x.symbol.replace(/\.NS$/, ''), name: x.longname || x.shortname || x.symbol, exchange: 'NSE' }));
+      setCache(cacheKey, remote, 3600);
+    } catch (error) {
+      console.error('Symbol search error:', error.message);
+      remote = [];
+    }
+  }
+
+  const have = new Set(local.map((s) => s.symbol));
+  return [...local, ...remote.filter((s) => !have.has(s.symbol))].slice(0, 8);
+};
+
 module.exports = {
+  yahooFinance,
+  LOOSE,
+  toYahooSymbol,
   getStockQuote,
   getCompanyProfile,
   getHistoricalData,
   getMarketNews,
   getCompanyNews,
   getQuarterlyFinancials,
-  getCompanyProfile,
+  searchSymbols,
 };

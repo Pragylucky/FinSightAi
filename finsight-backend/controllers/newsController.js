@@ -7,8 +7,7 @@ const { summarizeNews } = require('../services/aiService');
 // Query: ?category=general|forex|merger|crypto
 const getNews = async (req, res, next) => {
   try {
-    const { category = 'general' } = req.query;
-    const news = await getMarketNews(category);
+    const news = await getMarketNews();
     res.json({ success: true, news });
   } catch (error) {
     next(error);

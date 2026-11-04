@@ -1,98 +1,165 @@
 // data/screenerData.js
-// Curated stock universe for the FinSight screener.
-// Financial metrics are fetched dynamically from Yahoo Finance.
+// The stock universe for the screener, market movers and search: ~100 large NSE companies.
+// Prices and fundamentals are fetched live from Yahoo Finance by services/marketService.js.
+// Each row: [NSE symbol, display name, sector]
 
-const screenerStocks = [
-  {
-    symbol: 'RELIANCE',
-    yahooSymbol: 'RELIANCE.NS',
-    name: 'Reliance Industries',
-    sector: 'Energy',
-  },
-  {
-    symbol: 'TCS',
-    yahooSymbol: 'TCS.NS',
-    name: 'Tata Consultancy Services',
-    sector: 'IT',
-  },
-  {
-    symbol: 'HDFCBANK',
-    yahooSymbol: 'HDFCBANK.NS',
-    name: 'HDFC Bank',
-    sector: 'Banking',
-  },
-  {
-    symbol: 'INFY',
-    yahooSymbol: 'INFY.NS',
-    name: 'Infosys',
-    sector: 'IT',
-  },
-  {
-    symbol: 'ICICIBANK',
-    yahooSymbol: 'ICICIBANK.NS',
-    name: 'ICICI Bank',
-    sector: 'Banking',
-  },
-  {
-    symbol: 'BAJFINANCE',
-    yahooSymbol: 'BAJFINANCE.NS',
-    name: 'Bajaj Finance',
-    sector: 'Finance',
-  },
-  {
-    symbol: 'LT',
-    yahooSymbol: 'LT.NS',
-    name: 'Larsen & Toubro',
-    sector: 'Infrastructure',
-  },
-  {
-    symbol: 'HCLTECH',
-    yahooSymbol: 'HCLTECH.NS',
-    name: 'HCL Technologies',
-    sector: 'IT',
-  },
-  {
-    symbol: 'WIPRO',
-    yahooSymbol: 'WIPRO.NS',
-    name: 'Wipro',
-    sector: 'IT',
-  },
-  {
-    symbol: 'ASIANPAINT',
-    yahooSymbol: 'ASIANPAINT.NS',
-    name: 'Asian Paints',
-    sector: 'Consumer',
-  },
-  {
-    symbol: 'ETERNAL',
-    yahooSymbol: 'ETERNAL.NS',
-    name: 'Eternal',
-    sector: 'Consumer',
-  },
-  {
-    symbol: 'NAUKRI',
-    yahooSymbol: 'NAUKRI.NS',
-    name: 'Info Edge India',
-    sector: 'Technology',
-  },
-  {
-    symbol: 'PAYTM',
-    yahooSymbol: 'PAYTM.NS',
-    name: 'One97 Communications',
-    sector: 'Fintech',
-  },
-  {
-    symbol: 'ADANIENT',
-    yahooSymbol: 'ADANIENT.NS',
-    name: 'Adani Enterprises',
-    sector: 'Conglomerate',
-  },
-  {
-    symbol: 'SBIN',
-    yahooSymbol: 'SBIN.NS',
-    name: 'State Bank of India',
-    sector: 'Banking',
-  },
+const rows = [
+  // Energy & power
+  ['RELIANCE', 'Reliance Industries', 'Energy'],
+  ['ONGC', 'Oil & Natural Gas Corp', 'Energy'],
+  ['NTPC', 'NTPC', 'Energy'],
+  ['POWERGRID', 'Power Grid Corp', 'Energy'],
+  ['COALINDIA', 'Coal India', 'Energy'],
+  ['BPCL', 'Bharat Petroleum', 'Energy'],
+  ['IOC', 'Indian Oil Corp', 'Energy'],
+  ['GAIL', 'GAIL India', 'Energy'],
+  ['ADANIGREEN', 'Adani Green Energy', 'Energy'],
+  ['TATAPOWER', 'Tata Power', 'Energy'],
+  ['ADANIPOWER', 'Adani Power', 'Energy'],
+
+  // IT
+  ['TCS', 'Tata Consultancy Services', 'IT'],
+  ['INFY', 'Infosys', 'IT'],
+  ['HCLTECH', 'HCL Technologies', 'IT'],
+  ['WIPRO', 'Wipro', 'IT'],
+  ['TECHM', 'Tech Mahindra', 'IT'],
+  ['LTM', 'LTIMindtree (LTM)', 'IT'],
+  ['PERSISTENT', 'Persistent Systems', 'IT'],
+  ['COFORGE', 'Coforge', 'IT'],
+  ['MPHASIS', 'Mphasis', 'IT'],
+
+  // Banking
+  ['HDFCBANK', 'HDFC Bank', 'Banking'],
+  ['ICICIBANK', 'ICICI Bank', 'Banking'],
+  ['SBIN', 'State Bank of India', 'Banking'],
+  ['KOTAKBANK', 'Kotak Mahindra Bank', 'Banking'],
+  ['AXISBANK', 'Axis Bank', 'Banking'],
+  ['INDUSINDBK', 'IndusInd Bank', 'Banking'],
+  ['BANKBARODA', 'Bank of Baroda', 'Banking'],
+  ['PNB', 'Punjab National Bank', 'Banking'],
+  ['CANBK', 'Canara Bank', 'Banking'],
+  ['IDFCFIRSTB', 'IDFC First Bank', 'Banking'],
+  ['FEDERALBNK', 'Federal Bank', 'Banking'],
+  ['AUBANK', 'AU Small Finance Bank', 'Banking'],
+
+  // Financial services & insurance
+  ['BAJFINANCE', 'Bajaj Finance', 'Finance'],
+  ['BAJAJFINSV', 'Bajaj Finserv', 'Finance'],
+  ['SBILIFE', 'SBI Life Insurance', 'Finance'],
+  ['HDFCLIFE', 'HDFC Life Insurance', 'Finance'],
+  ['ICICIGI', 'ICICI Lombard', 'Finance'],
+  ['CHOLAFIN', 'Cholamandalam Investment', 'Finance'],
+  ['SHRIRAMFIN', 'Shriram Finance', 'Finance'],
+  ['MUTHOOTFIN', 'Muthoot Finance', 'Finance'],
+  ['PFC', 'Power Finance Corp', 'Finance'],
+  ['RECLTD', 'REC Limited', 'Finance'],
+  ['JIOFIN', 'Jio Financial Services', 'Finance'],
+  ['LICI', 'Life Insurance Corp', 'Finance'],
+
+  // FMCG
+  ['HINDUNILVR', 'Hindustan Unilever', 'FMCG'],
+  ['ITC', 'ITC', 'FMCG'],
+  ['NESTLEIND', 'Nestle India', 'FMCG'],
+  ['BRITANNIA', 'Britannia Industries', 'FMCG'],
+  ['TATACONSUM', 'Tata Consumer Products', 'FMCG'],
+  ['DABUR', 'Dabur India', 'FMCG'],
+  ['GODREJCP', 'Godrej Consumer Products', 'FMCG'],
+  ['MARICO', 'Marico', 'FMCG'],
+  ['VBL', 'Varun Beverages', 'FMCG'],
+
+  // Auto
+  ['MARUTI', 'Maruti Suzuki', 'Auto'],
+  ['M&M', 'Mahindra & Mahindra', 'Auto'],
+  ['TMPV', 'Tata Motors Passenger Vehicles', 'Auto'],
+  ['TMCV', 'Tata Motors (Commercial Vehicles)', 'Auto'],
+  ['BAJAJ-AUTO', 'Bajaj Auto', 'Auto'],
+  ['EICHERMOT', 'Eicher Motors', 'Auto'],
+  ['HEROMOTOCO', 'Hero MotoCorp', 'Auto'],
+  ['TVSMOTOR', 'TVS Motor', 'Auto'],
+  ['ASHOKLEY', 'Ashok Leyland', 'Auto'],
+
+  // Pharma & healthcare
+  ['SUNPHARMA', 'Sun Pharmaceutical', 'Pharma'],
+  ['DRREDDY', "Dr. Reddy's Laboratories", 'Pharma'],
+  ['CIPLA', 'Cipla', 'Pharma'],
+  ['DIVISLAB', "Divi's Laboratories", 'Pharma'],
+  ['APOLLOHOSP', 'Apollo Hospitals', 'Pharma'],
+  ['LUPIN', 'Lupin', 'Pharma'],
+  ['TORNTPHARM', 'Torrent Pharmaceuticals', 'Pharma'],
+  ['ZYDUSLIFE', 'Zydus Lifesciences', 'Pharma'],
+
+  // Metals & mining
+  ['TATASTEEL', 'Tata Steel', 'Metals'],
+  ['JSWSTEEL', 'JSW Steel', 'Metals'],
+  ['HINDALCO', 'Hindalco Industries', 'Metals'],
+  ['VEDL', 'Vedanta', 'Metals'],
+  ['ADANIENT', 'Adani Enterprises', 'Metals'],
+  ['JINDALSTEL', 'Jindal Steel & Power', 'Metals'],
+  ['NMDC', 'NMDC', 'Metals'],
+  ['SAIL', 'Steel Authority of India', 'Metals'],
+
+  // Infrastructure, capital goods & materials
+  ['LT', 'Larsen & Toubro', 'Infrastructure'],
+  ['ULTRACEMCO', 'UltraTech Cement', 'Infrastructure'],
+  ['GRASIM', 'Grasim Industries', 'Infrastructure'],
+  ['ADANIPORTS', 'Adani Ports & SEZ', 'Infrastructure'],
+  ['SIEMENS', 'Siemens', 'Infrastructure'],
+  ['ABB', 'ABB India', 'Infrastructure'],
+  ['HAL', 'Hindustan Aeronautics', 'Infrastructure'],
+  ['BEL', 'Bharat Electronics', 'Infrastructure'],
+  ['DLF', 'DLF', 'Infrastructure'],
+  ['AMBUJACEM', 'Ambuja Cements', 'Infrastructure'],
+  ['SHREECEM', 'Shree Cement', 'Infrastructure'],
+
+  // Consumer & retail
+  ['TITAN', 'Titan Company', 'Consumer'],
+  ['ASIANPAINT', 'Asian Paints', 'Consumer'],
+  ['TRENT', 'Trent', 'Consumer'],
+  ['DMART', 'Avenue Supermarts (DMart)', 'Consumer'],
+  ['ETERNAL', 'Eternal (Zomato)', 'Consumer'],
+  ['NYKAA', 'FSN E-Commerce (Nykaa)', 'Consumer'],
+  ['PIDILITIND', 'Pidilite Industries', 'Consumer'],
+  ['HAVELLS', 'Havells India', 'Consumer'],
+  ['INDIGO', 'InterGlobe Aviation (IndiGo)', 'Consumer'],
+  ['NAUKRI', 'Info Edge (Naukri)', 'Consumer'],
+
+  // Telecom
+  ['BHARTIARTL', 'Bharti Airtel', 'Telecom'],
+  ['IDEA', 'Vodafone Idea', 'Telecom'],
 ];
 
-module.exports = { screenerStocks };
+const screenerStocks = rows.map(([symbol, name, sector]) => ({
+  symbol,
+  yahooSymbol: `${symbol}.NS`,
+  name,
+  sector,
+}));
+
+// A few large US names, so search and company pages work beyond India.
+const usStocks = [
+  { symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ' },
+  { symbol: 'MSFT', name: 'Microsoft Corporation', exchange: 'NASDAQ' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', exchange: 'NASDAQ' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', exchange: 'NASDAQ' },
+  { symbol: 'META', name: 'Meta Platforms', exchange: 'NASDAQ' },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation', exchange: 'NASDAQ' },
+  { symbol: 'TSLA', name: 'Tesla Inc.', exchange: 'NASDAQ' },
+  { symbol: 'NFLX', name: 'Netflix Inc.', exchange: 'NASDAQ' },
+  { symbol: 'AMD', name: 'Advanced Micro Devices', exchange: 'NASDAQ' },
+  { symbol: 'JPM', name: 'JPMorgan Chase', exchange: 'NYSE' },
+  { symbol: 'V', name: 'Visa Inc.', exchange: 'NYSE' },
+  { symbol: 'KO', name: 'Coca-Cola Company', exchange: 'NYSE' },
+];
+
+// Old tickers people may still have saved or type. Maps to the current Yahoo ticker.
+const symbolAliases = {
+  ZOMATO: 'ETERNAL',
+  TATAMOTORS: 'TMPV',
+  LTIM: 'LTM',
+  HDFC: 'HDFCBANK',
+  ICICI: 'ICICIBANK',
+  BAJFIN: 'BAJFINANCE',
+  FSN: 'NYKAA',
+};
+
+module.exports = { screenerStocks, usStocks, symbolAliases };

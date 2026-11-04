@@ -3,7 +3,8 @@
 
 const axios = require('axios');
 
-const GEMINI_MODEL = 'gemini-3.5-flash';
+// Override with GEMINI_MODEL in .env if Google retires or renames a model
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -55,7 +56,8 @@ const callGemini = async (
   } = {}
 ) => {
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is missing from environment variables');
+    console.error('GEMINI_API_KEY is missing from environment variables');
+    throw new Error('The AI assistant is not configured on the server yet.');
   }
 
   const MAX_RETRIES = 2;
@@ -219,6 +221,16 @@ Respond to the user's latest message as FinSight AI.
   };
 };
 
+// Pulls the first JSON object out of a model reply, even if it is wrapped in markdown or chatter
+const parseJsonObject = (text) => {
+  const clean = String(text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  try { return JSON.parse(clean); } catch { /* fall through */ }
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try { return JSON.parse(clean.slice(start, end + 1)); } catch { return null; }
+};
+
 // ── Generate Company AI Summary ───────────────────────────────
 const generateCompanySummary = async (companyData) => {
   const prompt = `
@@ -257,41 +269,21 @@ Do not wrap the response in markdown.
     maxOutputTokens: 1000,
   });
 
-  const clean = text
-  .replace(/```json/gi, '')
-  .replace(/```/g, '')
-  .trim();
+  const analysis = parseJsonObject(text);
+  const outlooks = ['Positive', 'Neutral', 'Negative'];
 
-try {
-  return JSON.parse(clean);
-} catch (error) {
-  console.error('Failed to parse Gemini company summary JSON:');
-  console.error(clean);
-
-  // Try extracting only the JSON object
-  const start = clean.indexOf('{');
-  const end = clean.lastIndexOf('}');
-
-  if (start !== -1 && end !== -1) {
-    const extractedJSON = clean.slice(start, end + 1);
-
-    try {
-      return JSON.parse(extractedJSON);
-    } catch (secondError) {
-      console.error('JSON extraction also failed:', secondError.message);
-    }
+  // Don't pass a made-up "Neutral / 50" analysis off as real: fail so the UI can offer a retry
+  if (!analysis || typeof analysis.summary !== 'string' || !analysis.summary.trim()) {
+    throw new Error('The AI returned an unreadable analysis. Please try again.');
   }
 
-  // Safe fallback so Company page does not break
   return {
-    summary:
-      'AI analysis is temporarily unavailable. Please review the financial metrics shown above.',
-    pros: [],
-    cons: [],
-    outlook: 'Neutral',
-    riskScore: 50,
+    summary: analysis.summary.trim(),
+    pros: (Array.isArray(analysis.pros) ? analysis.pros : []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 5),
+    cons: (Array.isArray(analysis.cons) ? analysis.cons : []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 5),
+    outlook: outlooks.includes(analysis.outlook) ? analysis.outlook : 'Neutral',
+    riskScore: Number.isFinite(Number(analysis.riskScore)) ? Math.min(100, Math.max(1, Math.round(Number(analysis.riskScore)))) : null,
   };
-}
 };
 
 // ── Summarize Financial News ──────────────────────────────────
@@ -333,12 +325,9 @@ Rules:
     maxOutputTokens: 500,
   });
 
-  const clean = text
-    .replace(/```json/gi, '')
-    .replace(/```/g, '')
-    .trim();
-
-  return JSON.parse(clean);
+  const parsed = parseJsonObject(text);
+  if (!parsed) throw new Error('The AI returned an unreadable summary. Please try again.');
+  return parsed;
 };
 
 module.exports = {

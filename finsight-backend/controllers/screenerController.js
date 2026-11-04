@@ -1,137 +1,71 @@
 // controllers/screenerController.js
-// Stock screener — filter by financial metrics
-// In production you'd query a financial data provider
-// For now returns our local dataset with optional live prices
+// Stock screener over the ~100-stock universe. Data comes from the background snapshot in
+// services/marketService.js, so this responds instantly.
 
+const { getSnapshot } = require('../services/marketService');
 const { screenerStocks } = require('../data/screenerData');
-const { getCompanyProfile } = require('../services/financeService');
+
+const toNum = (v, fallback) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 // ── GET /api/screener ─────────────────────────────────────────
-// Query params: sector, peMax, roeMin, marketCapMin, divMin, search, sortBy, sortDir, page, limit
+// Query: sector, search, peMin, peMax, roeMin, marketCapMin, divMin, debtEqMax, sortBy, sortDir, page, limit
 const screenStocks = async (req, res, next) => {
   try {
-    const {
-      sector = 'all',
-      peMax = 200,
-      peMin = 0,
-      roeMin = 0,
-      marketCapMin = 0,
-      divMin = 0,
-      debtEqMax = 100,
-      search = '',
-      sortBy = 'marketCap',
-      sortDir = 'desc',
-      page = 1,
-      limit = 20,
-    } = req.query;
+    const { sector = 'all', search = '', sortBy = 'marketCap', sortDir = 'desc' } = req.query;
+    const peMin = toNum(req.query.peMin, null);
+    const peMax = toNum(req.query.peMax, null);
+    const roeMin = toNum(req.query.roeMin, null);
+    const marketCapMin = toNum(req.query.marketCapMin, null);
+    const divMin = toNum(req.query.divMin, null);
+    const debtEqMax = toNum(req.query.debtEqMax, null);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 150);
 
-    const profiles = await Promise.all(
-  screenerStocks.map(async (stock) => {
-    try {
-      const profile = await getCompanyProfile(stock.yahooSymbol);
+    const snapshot = await getSnapshot();
+    let results = snapshot.stocks;
 
-      if (!profile) {
-        return null;
-      }
-
-      return {
-        symbol: stock.symbol,
-        name: profile.name || stock.name,
-        sector:
-          profile.sector && profile.sector !== 'Unknown'
-            ? profile.sector
-            : stock.sector,
-
-        marketCap: profile.marketCap
-          ? profile.marketCap / 10000000
-          : 0,
-
-        pe: profile.pe || 0,
-        roe: profile.roe || 0,
-        debtEq: profile.debtToEquity || 0,
-        div: profile.dividendYield || 0,
-        revenueGrowth: profile.revenueGrowth || 0,
-
-        high52W: profile.week52High || 0,
-        low52W: profile.week52Low || 0,
-      };
-    } catch (error) {
-      console.error(
-        `Screener profile error for ${stock.symbol}:`,
-        error.message
-      );
-
-      return null;
-    }
-  })
-);
-
-let results = profiles.filter(Boolean);
-console.log(
-  '🔥 SCREENER PROFILES:',
-  profiles.map(p => p && ({
-    symbol: p.symbol,
-    marketCap: p.marketCap,
-    pe: p.pe,
-    roe: p.roe,
-  }))
-);
-
-console.log(
-  `🔥 Yahoo profiles successful: ${profiles.filter(Boolean).length}/${screenerStocks.length}`
-);
-
-    // ── Apply filters ──────────────────────────────────────
     if (search) {
-      const q = search.toLowerCase();
-      results = results.filter(
-        s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
-      );
+      const q = String(search).toLowerCase();
+      results = results.filter((s) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+    }
+    if (sector !== 'all') results = results.filter((s) => s.sector === sector);
+
+    // A missing metric (null) never passes a filter on that metric
+    results = results.filter((s) =>
+      (peMin == null || (s.pe != null && s.pe >= peMin)) &&
+      (peMax == null || (s.pe != null && s.pe <= peMax)) &&
+      (roeMin == null || (s.roe != null && s.roe >= roeMin)) &&
+      (marketCapMin == null || (s.marketCap != null && s.marketCap >= marketCapMin)) &&
+      (divMin == null || (s.div != null && s.div >= divMin)) &&
+      (debtEqMax == null || (s.debtEq != null && s.debtEq <= debtEqMax)));
+
+    const sortable = ['marketCap', 'pe', 'roe', 'div', 'debtEq', 'revenueGrowth', 'price', 'changePercent'];
+    if (sortable.includes(sortBy)) {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      // nulls always sort last
+      results = [...results].sort((a, b) => {
+        if (a[sortBy] == null && b[sortBy] == null) return 0;
+        if (a[sortBy] == null) return 1;
+        if (b[sortBy] == null) return -1;
+        return (a[sortBy] - b[sortBy]) * dir;
+      });
     }
 
-    if (sector !== 'all') {
-      results = results.filter(s => s.sector === sector);
-    }
-
-   results = results.filter(s => {
-  const pe = Number(s.pe) || 0;
-  const roe = Number(s.roe) || 0;
-  const marketCap = Number(s.marketCap) || 0;
-  const div = Number(s.div) || 0;
-  const debtEq = Number(s.debtEq) || 0;
-
-  return (
-    (parseFloat(peMin) === 0 || pe >= parseFloat(peMin)) &&
-    (parseFloat(peMax) === 200 || pe <= parseFloat(peMax)) &&
-    (parseFloat(roeMin) === 0 || roe >= parseFloat(roeMin)) &&
-    (parseFloat(marketCapMin) === 0 ||
-      marketCap >= parseFloat(marketCapMin)) &&
-    (parseFloat(divMin) === 0 || div >= parseFloat(divMin)) &&
-    (parseFloat(debtEqMax) === 100 ||
-      debtEq <= parseFloat(debtEqMax))
-  );
-});
-
-    // ── Sort ───────────────────────────────────────────────
-    const allowedSorts = ['marketCap', 'pe', 'roe', 'div', 'debtEq', 'revenueGrowth', 'price'];
-    if (allowedSorts.includes(sortBy)) {
-      results.sort((a, b) =>
-        sortDir === 'desc' ? b[sortBy] - a[sortBy] : a[sortBy] - b[sortBy]
-      );
-    }
-
-    // ── Paginate ───────────────────────────────────────────
-    const pageNum = parseInt(page);
-    const limitNum = Math.min(parseInt(limit), 50); // max 50 per page
-    const startIndex = (pageNum - 1) * limitNum;
-    const paginatedResults = results.slice(startIndex, startIndex + limitNum);
-
+    const start = (page - 1) * limit;
     res.json({
       success: true,
-      count: paginatedResults.length,
+      count: Math.min(limit, Math.max(results.length - start, 0)),
       total: results.length,
-      page: pageNum,
-      totalPages: Math.ceil(results.length / limitNum),
-      stocks: paginatedResults,
+      universe: snapshot.total,
+      page,
+      totalPages: Math.ceil(results.length / limit),
+      updatedAt: snapshot.updatedAt,
+      // true while ROE / D/E / growth are still being fetched in the background
+      loadingFundamentals: snapshot.loadingFundamentals,
+      stocks: results.slice(start, start + limit),
     });
   } catch (error) {
     next(error);
@@ -139,10 +73,8 @@ console.log(
 };
 
 // ── GET /api/screener/sectors ─────────────────────────────────
-const getSectors = async (req, res) => {
-  const { screenerStocks } = require('../data/screenerData');
-  const sectors = [...new Set(screenerStocks.map(s => s.sector))].sort();
-  res.json({ success: true, sectors });
+const getSectors = (req, res) => {
+  res.json({ success: true, sectors: [...new Set(screenerStocks.map((s) => s.sector))].sort() });
 };
 
 module.exports = { screenStocks, getSectors };

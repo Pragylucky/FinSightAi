@@ -28,12 +28,14 @@ const getHistoricalNav = (history, yearsAgo) => {
     }
   }
 
-  return closest ? parseFloat(closest.nav) : null;
+  // A fund younger than the period has no NAV near that date: report "no data", not a made-up return
+  const MAX_GAP_MS = 45 * 24 * 60 * 60 * 1000;
+  return closest && smallestDifference <= MAX_GAP_MS ? parseFloat(closest.nav) : null;
 };
 
 // Calculate annualized return (CAGR)
 const calculateReturn = (currentNav, oldNav, years) => {
-  if (!currentNav || !oldNav || oldNav <= 0) return 0;
+  if (!currentNav || !oldNav || oldNav <= 0) return null;
 
   const cagr =
     (Math.pow(currentNav / oldNav, 1 / years) - 1) * 100;
@@ -41,9 +43,17 @@ const calculateReturn = (currentNav, oldNav, years) => {
   return Number(cagr.toFixed(2));
 };
 
+// Each fund needs a search plus a full NAV-history download, so cache the whole result.
+const CACHE_MS = 6 * 60 * 60 * 1000;
+let cached = { at: 0, funds: [] };
+
 // GET /api/mutual-funds
 const getMutualFunds = async (req, res, next) => {
   try {
+    if (cached.funds.length && Date.now() - cached.at < CACHE_MS) {
+      return res.json({ success: true, count: cached.funds.length, funds: cached.funds, cached: true });
+    }
+
     const funds = await Promise.all(
       mutualFundSchemes.map(async (fund) => {
         try {
@@ -131,6 +141,12 @@ const getMutualFunds = async (req, res, next) => {
     );
 
     const validFunds = funds.filter(Boolean);
+
+    // If every fetch failed, serve the last good list instead of an empty page
+    if (validFunds.length) cached = { at: Date.now(), funds: validFunds };
+    else if (cached.funds.length) {
+      return res.json({ success: true, count: cached.funds.length, funds: cached.funds, cached: true });
+    }
 
     console.log(
       `🔥 Mutual funds successful: ${validFunds.length}/${mutualFundSchemes.length}`

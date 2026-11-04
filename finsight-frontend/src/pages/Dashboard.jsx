@@ -1,15 +1,13 @@
 // Dashboard.jsx — first screen after login.
-// Portfolio, watchlist and news come from the API. The backend has no index /
-// top-movers feed yet, so those two cards use sample data and say so.
+// Everything here comes from the API: portfolio, watchlist, news, indices and top movers.
 
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, TrendingDown, BriefcaseBusiness, Star, ArrowRight, Sparkles, Layers } from 'lucide-react';
-import { Card, StatCard, SectionHeader, StockRow, Badge, EmptyState, ErrorNotice, LoadingSkeleton } from '../components/ui';
-import { topGainers, topLosers, dashboardStats } from '../data/mockData';
+import { Card, StatCard, SectionHeader, StockRow, EmptyState, ErrorNotice, LoadingSkeleton } from '../components/ui';
 import { PortfolioPieChart } from '../components/charts';
 import { Stagger, Item } from '../components/motion';
 import { useAuth } from '../context/AuthContext';
-import { greeting } from '../lib/format';
+import { greeting, timeAgo } from '../lib/format';
 import useApi from '../lib/useApi';
 import api from '../services/api';
 import { CHART_PALETTE } from '../lib/theme';
@@ -17,6 +15,7 @@ import { CHART_PALETTE } from '../lib/theme';
 const fetchPortfolio = () => api.portfolio.get();
 const fetchWatchlist = () => api.watchlist.get();
 const fetchNews = () => api.news.get();
+const fetchMarket = () => api.market.overview();
 
 
 function IndexCard({ name, value, change }) {
@@ -25,18 +24,14 @@ function IndexCard({ name, value, change }) {
     <div className="bg-bg-tertiary/80 border border-bg-border rounded-lg p-3 flex items-center justify-between">
       <div>
         <p className="text-xs text-text-muted mb-0.5">{name}</p>
-        <p className="font-mono font-bold text-sm text-text-primary">{value.toLocaleString('en-IN')}</p>
+        <p className="font-mono font-bold text-sm text-text-primary">{value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
       </div>
       <div className={`flex items-center gap-1 text-xs font-mono font-semibold ${isUp ? 'text-accent-green' : 'text-accent-red'}`}>
         {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-        {isUp ? '+' : ''}{change}%
+        {isUp ? '+' : ''}{change.toFixed(2)}%
       </div>
     </div>
   );
-}
-
-function SampleTag() {
-  return <Badge variant="default">Sample data</Badge>;
 }
 
 export default function Dashboard() {
@@ -45,12 +40,15 @@ export default function Dashboard() {
   const portfolio = useApi(fetchPortfolio, { allow404: true });
   const watchlist = useApi(fetchWatchlist, { allow404: true });
   const news = useApi(fetchNews);
+  const market = useApi(fetchMarket);
 
   const summary = portfolio.data?.portfolio?.summary;
   const holdings = portfolio.data?.portfolio?.holdings || [];
   const stocks = watchlist.data?.watchlist?.stocks || [];
   const headlines = (news.data?.news || []).slice(0, 4);
-  const { nifty50, sensex, gold, dollarInr } = dashboardStats;
+  const indices = market.data?.indices || [];
+  const gainers = market.data?.gainers || [];
+  const losers = market.data?.losers || [];
 
   // Sector allocation from real holdings by current value
   const bySector = {};
@@ -75,11 +73,9 @@ export default function Dashboard() {
       </Item>
 
       <Item className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <IndexCard name="Nifty 50" value={nifty50.value} change={nifty50.change} />
-        <IndexCard name="SENSEX" value={sensex.value} change={sensex.change} />
-        <IndexCard name="Gold (10g)" value={gold.value} change={gold.change} />
-        <IndexCard name="USD/INR" value={dollarInr.value} change={dollarInr.change} />
-        <p className="col-span-full -mt-1 text-[11px] text-text-muted">Index levels are sample data; live index feeds aren&apos;t connected yet.</p>
+        {market.loading
+          ? [0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-[62px] rounded-lg" />)
+          : indices.map((i) => <IndexCard key={i.name} name={i.name} value={i.value} change={i.change} />)}
       </Item>
 
       <Item className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -103,21 +99,25 @@ export default function Dashboard() {
           <Card>
             <SectionHeader
               title="Top movers"
-              subtitle="Today"
-              action={<SampleTag />}
+              subtitle="Across ~100 large NSE stocks, today"
+              action={<button onClick={() => navigate('/screener')} className="flex items-center gap-1 text-xs text-accent-primary hover:underline">Screener <ArrowRight size={12} /></button>}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {[['Gainers', topGainers], ['Losers', topLosers]].map(([label, list]) => (
-                <div key={label}>
-                  <p className="text-xs uppercase tracking-wider text-text-muted mb-1 px-3">{label}</p>
-                  <div className="space-y-0.5">
-                    {list.map((s) => (
-                      <StockRow key={s.symbol} {...s} extra={s.volume} onClick={() => navigate(`/company/${s.symbol}`)} />
-                    ))}
+            {market.loading ? <LoadingSkeleton lines={5} height="h-8" /> : market.error ? (
+              <ErrorNotice message={`Couldn't load market data: ${market.error}`} onRetry={market.reload} />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {[['Gainers', gainers], ['Losers', losers]].map(([label, list]) => (
+                  <div key={label}>
+                    <p className="text-xs uppercase tracking-wider text-text-muted mb-1 px-3">{label}</p>
+                    <div className="space-y-0.5">
+                      {list.map((s) => (
+                        <StockRow key={s.symbol} {...s} onClick={() => navigate(`/company/${encodeURIComponent(s.symbol)}`)} />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card>
@@ -144,7 +144,7 @@ export default function Dashboard() {
                     className="block py-3 border-b border-bg-border last:border-0 group"
                   >
                     <p className="text-sm font-medium text-text-primary leading-snug mb-1 group-hover:text-accent-primary transition-colors line-clamp-2">{item.title}</p>
-                    <p className="text-xs text-text-muted">{item.source}{item.time ? ` · ${item.time}` : ''}</p>
+                    <p className="text-xs text-text-muted">{item.source}{item.time ? ` · ${timeAgo(item.time)}` : ''}</p>
                   </a>
                 ))}
               </div>
@@ -170,7 +170,7 @@ export default function Dashboard() {
             {watchlist.loading ? <LoadingSkeleton lines={4} height="h-8" /> : stocks.length ? (
               <div className="space-y-0.5">
                 {stocks.slice(0, 5).map((s) => (
-                  <StockRow key={s.symbol} symbol={s.symbol} name={s.name} price={s.currentPrice} change={s.change} onClick={() => navigate(`/company/${s.symbol}`)} />
+                  <StockRow key={s.symbol} symbol={s.symbol} name={s.name} price={s.currentPrice} change={s.change} onClick={() => navigate(`/company/${encodeURIComponent(s.symbol)}`)} />
                 ))}
               </div>
             ) : (

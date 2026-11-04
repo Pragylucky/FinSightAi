@@ -5,10 +5,10 @@
 const rateLimit = require('express-rate-limit');
 
 // ── Global limiter — applies to all /api routes ───────────────
-// 100 requests per 15 minutes per IP
+// 400 requests per 15 minutes per IP (a dashboard load alone makes ~6 calls)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes in milliseconds
-  max: 100,
+  max: 400,
   message: {
     success: false,
     message: 'Too many requests from this IP. Please try again after 15 minutes.',

@@ -117,26 +117,27 @@ const api = {
   // ── Company / Stocks ─────────────────────────────────────────
   company: {
     search: (q) => axiosInstance.get('/companies/search', { params: { q } }),
-    get: (symbol) => axiosInstance.get(`/companies/${symbol}`),
-    getQuote: (symbol) => axiosInstance.get(`/companies/${symbol}/quote`),
-    getChart: (symbol, days = 30) => axiosInstance.get(`/companies/${symbol}/chart`, { params: { days } }),
-    getNews: (symbol) => axiosInstance.get(`/companies/${symbol}/news`),
+    get: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}`),
+    getQuote: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/quote`),
+    getChart: (symbol, days = 30) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/chart`, { params: { days } }),
+    getNews: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/news`),
+    getAnalysis: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/analysis`, { timeout: 60000 }),
   },
 
   // ── Portfolio ────────────────────────────────────────────────
   portfolio: {
     get: () => axiosInstance.get('/portfolio'),
     addHolding: (data) => axiosInstance.post('/portfolio/holdings', data),
-    updateHolding: (symbol, data) => axiosInstance.put(`/portfolio/holdings/${symbol}`, data),
-    removeHolding: (symbol) => axiosInstance.delete(`/portfolio/holdings/${symbol}`),
+    updateHolding: (symbol, data) => axiosInstance.put(`/portfolio/holdings/${encodeURIComponent(symbol)}`, data),
+    removeHolding: (symbol) => axiosInstance.delete(`/portfolio/holdings/${encodeURIComponent(symbol)}`),
   },
 
   // ── Watchlist ────────────────────────────────────────────────
   watchlist: {
     get: () => axiosInstance.get('/watchlist'),
     add: (data) => axiosInstance.post('/watchlist', data),
-    update: (symbol, data) => axiosInstance.put(`/watchlist/${symbol}`, data),
-    remove: (symbol) => axiosInstance.delete(`/watchlist/${symbol}`),
+    update: (symbol, data) => axiosInstance.put(`/watchlist/${encodeURIComponent(symbol)}`, data),
+    remove: (symbol) => axiosInstance.delete(`/watchlist/${encodeURIComponent(symbol)}`),
   },
 
   // ── News ────────────────────────────────────────────────────
@@ -151,6 +152,11 @@ const api = {
     getHistory: () => axiosInstance.get('/chat/history'),
     getChat: (chatId) => axiosInstance.get(`/chat/${chatId}`),
     delete: (chatId) => axiosInstance.delete(`/chat/${chatId}`),
+  },
+
+  // ── Market overview (indices, movers, ticker) ────────────────
+  market: {
+    overview: () => axiosInstance.get('/market/overview'),
   },
 
   // ── Screener ─────────────────────────────────────────────────

@@ -25,6 +25,8 @@ const watchlistRoutes = require('./routes/watchlist');
 const newsRoutes = require('./routes/news');
 const screenerRoutes = require('./routes/screener');
 const userRoutes = require('./routes/user');
+const marketRoutes = require('./routes/market');
+const { start: startMarketData } = require('./services/marketService');
 
 // ── Create Express app ───────────────────────────────────────
 const app = express();
@@ -108,6 +110,7 @@ app.use('/api/watchlist', watchlistRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/screener', screenerRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/market', marketRoutes);
 app.use(
   '/api/mutual-funds',
   require('./routes/mutualFundRoutes')
@@ -126,6 +129,7 @@ app.use(globalErrorHandler);
 // ── Start Server ─────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
+  startMarketData(); // warm the stock snapshot in the background
   console.log(`
   ╔═══════════════════════════════════════╗
   ║     FinSight AI Backend Running       ║

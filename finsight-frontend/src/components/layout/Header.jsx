@@ -8,7 +8,6 @@ import api from '../../services/api';
 import { isMarketOpen } from '../../lib/format';
 import { motion } from 'framer-motion';
 
-const TICKER_SYMBOLS = ['TCS', 'INFY', 'RELIANCE', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'LT', 'BAJFINANCE'];
 const CACHE_KEY = 'finsight:ticker';
 const CACHE_MS = 5 * 60 * 1000;
 
@@ -20,25 +19,22 @@ function readCache() {
   return null;
 }
 
-// Live quotes from the backend. If they can't be fetched we render nothing
-// rather than showing made-up prices.
+// Live indices + the biggest NSE stocks from one backend call. If it can't be fetched we render
+// nothing rather than showing made-up prices.
 function MarketTicker() {
   const [items, setItems] = useState(() => readCache() || []);
 
   useEffect(() => {
     if (items.length) return undefined;
     let cancelled = false;
-    (async () => {
-      const results = await Promise.allSettled(TICKER_SYMBOLS.map((s) => api.company.getQuote(s)));
-      const next = results
-        .map((r, i) => (r.status === 'fulfilled' && r.value?.quote?.price != null
-          ? { symbol: TICKER_SYMBOLS[i], price: r.value.quote.price, change: r.value.quote.changePercent ?? 0 }
-          : null))
-        .filter(Boolean);
-      if (cancelled || !next.length) return;
-      setItems(next);
-      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), items: next })); } catch { /* storage unavailable */ }
-    })();
+    api.market.overview()
+      .then((res) => {
+        const next = res.ticker || [];
+        if (cancelled || !next.length) return;
+        setItems(next);
+        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), items: next })); } catch { /* storage unavailable */ }
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [items.length]);
 
@@ -51,7 +47,7 @@ function MarketTicker() {
         {doubled.map((s, i) => (
           <div key={i} className="flex items-center gap-2 shrink-0" aria-hidden={i >= items.length}>
             <span className="font-mono text-xs text-text-secondary font-semibold">{s.symbol}</span>
-            <span className="font-mono text-xs text-text-primary">{s.price.toLocaleString('en-IN')}</span>
+            <span className="font-mono text-xs text-text-primary">{s.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
             <span className={`text-xs font-mono ${s.change >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
               {s.change >= 0 ? '+' : ''}{s.change.toFixed(2)}%
             </span>

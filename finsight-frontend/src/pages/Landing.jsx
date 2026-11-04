@@ -134,7 +134,7 @@ export default function Landing() {
             className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4"
           >
             {[
-              ['Live', 'NSE & BSE quotes'],
+              ['100+', 'NSE stocks tracked live'],
               ['AI', 'Company summaries'],
               ['Daily', 'Mutual fund NAVs'],
               ['Free', 'To sign up'],
