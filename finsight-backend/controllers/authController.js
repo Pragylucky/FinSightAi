@@ -5,32 +5,50 @@
 // We use try/catch + next(error) to send errors to globalErrorHandler
 
 const User = require('../models/User');
+const Portfolio = require('../models/Portfolio');
+const Watchlist = require('../models/Watchlist');
 const { AppError } = require('../middleware/errorHandler');
-const { sendVerificationEmail } = require('../utils/sendEmail');
+const { sendVerificationCode, sendPasswordResetEmail, isConfigured } = require('../utils/sendEmail');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+
+const CODE_TTL_MS = 15 * 60 * 1000;      // a code is valid for 15 minutes
+const RESEND_COOLDOWN_MS = 60 * 1000;    // one email per minute per account
+const MAX_CODE_ATTEMPTS = 5;             // wrong guesses before the code is burned
+const isProd = process.env.NODE_ENV === 'production';
+// Email verification is OFF by default (college/demo friendly). Set REQUIRE_EMAIL_VERIFICATION=true
+// to make sign-up require the emailed 6-digit code.
+const requireVerification = () => process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
+
+const sha256 = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
+const safeEqual = (a, b) => {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+};
+
+// Refresh-token cookie. In production the frontend (e.g. Vercel) and API are on different
+// sites, so the cookie must be SameSite=None; Secure or the browser never sends it back
+// and users get logged out when the 15-minute access token expires.
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? 'none' : 'lax',
+  path: '/',
+};
 
 // ── Helper: Send tokens in response ──────────────────────────
-// Access token → in JSON response body (stored in memory / localStorage on frontend)
-// Refresh token → in httpOnly cookie (can't be accessed by JS, more secure)
+// Access token → JSON body (frontend keeps it in localStorage)
+// Refresh token → httpOnly cookie (JS can't read it)
 const sendTokens = (user, statusCode, res) => {
   const accessToken = user.generateAccessToken();
   const refreshToken = user.generateRefreshToken();
 
-  // httpOnly cookie — JS can't read this, only browser sends it automatically
-  // This is more secure than storing refresh token in localStorage
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-  });
-
-  // Remove password from output
-  user.password = undefined;
+  res.cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
 
   res.status(statusCode).json({
     success: true,
-    accessToken,  // frontend stores this and sends with every request
+    accessToken,
     user: {
       id: user._id,
       name: user.name,
@@ -38,8 +56,36 @@ const sendTokens = (user, statusCode, res) => {
       role: user.role,
       isVerified: user.isVerified,
       avatar: user.avatar,
+      isGuest: user.isGuest,
     },
   });
+};
+
+// Generate a fresh 6-digit code, store its hash, and email it.
+// Never throws: returns { emailSent } so callers can tell the user honestly.
+const issueVerificationCode = async (user) => {
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+
+  user.verificationCodeHash = sha256(code);
+  user.verificationCodeExpiry = new Date(Date.now() + CODE_TTL_MS);
+  user.verificationAttempts = 0;
+  user.verificationLastSent = new Date();
+  await user.save({ validateBeforeSave: false });
+
+  // No mail transport configured (typical on a fresh local setup): print the code instead.
+  if (!isConfigured()) {
+    console.warn(`[auth] Email is not configured. Verification code for ${user.email}: ${code}`);
+    return { emailSent: false };
+  }
+
+  try {
+    await sendVerificationCode(user.email, user.name, code);
+    return { emailSent: true };
+  } catch (err) {
+    console.error('[auth] Verification email failed:', err.response?.data || err.message);
+    if (!isProd) console.warn(`[auth] (dev) code for ${user.email}: ${code}`);
+    return { emailSent: false };
+  }
 };
 
 // ── POST /api/auth/register ───────────────────────────────────
@@ -47,44 +93,45 @@ const register = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    // Verification off: create a ready-to-use account and sign the user in immediately.
+    if (!requireVerification()) {
+      if (await User.findOne({ email })) {
+        return next(new AppError('An account with this email already exists', 400));
+      }
+      const created = await User.create({ name, email, password, isVerified: true });
+      await Portfolio.create({ user: created._id });
+      await Watchlist.create({ user: created._id });
+      return sendTokens(created, 201, res);
+    }
+
+    let user = await User.findOne({ email }).select('+verificationCodeHash');
+
+    if (user && user.isVerified) {
       return next(new AppError('An account with this email already exists', 400));
     }
 
-    // Create verification token (random hex string)
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-    // Create user — password gets hashed in User model's pre-save hook
-    const user = await User.create({
-      name,
-      email,
-      password,
-      verificationToken,
-      verificationTokenExpiry,
-    });
-  
-
-    // Also create empty portfolio and watchlist for the user
-    const Portfolio = require('../models/Portfolio');
-    const Watchlist = require('../models/Watchlist');
-    await Portfolio.create({ user: user._id });
-    await Watchlist.create({ user: user._id });
-
-    // Send verification email (don't block response if it fails)
-    try {
-      await sendVerificationEmail(user.email, user.name, verificationToken);
-    } catch (emailError) {
-      console.error('Email send failed:', emailError.message);
-      // Don't fail registration if email fails
+    if (user) {
+      // Signed up before but never verified: let them start over instead of being stuck.
+      // Safe because activating the account still requires the code sent to this inbox.
+      user.name = name;
+      user.password = password;
+      await user.save();
+    } else {
+      user = await User.create({ name, email, password });
+      await Portfolio.create({ user: user._id });
+      await Watchlist.create({ user: user._id });
     }
 
+    const recentlySent = user.verificationLastSent && Date.now() - user.verificationLastSent.getTime() < RESEND_COOLDOWN_MS && user.verificationCodeHash;
+    const { emailSent } = recentlySent ? { emailSent: true } : await issueVerificationCode(user);
+
     res.status(201).json({
-        success: true,
-        message: 'Account created successfully. Please check your email to verify your account.',
-        requiresVerification: true,
+      success: true,
+      message: emailSent
+        ? 'Account created. We emailed you a 6-digit code.'
+        : 'Account created, but we could not send the email. Use "Resend code" in a moment.',
+      requiresVerification: true,
+      emailSent,
     });
   } catch (error) {
     next(error);
@@ -100,35 +147,28 @@ const login = async (req, res, next) => {
       return next(new AppError('Please provide email and password', 400));
     }
 
-    // .select('+password') overrides the select: false in the model
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return next(new AppError('Invalid email or password', 401));
     }
 
-    // Check if account is active (soft delete check)
     if (!user.isActive) {
       return next(new AppError('Account has been deactivated. Contact support.', 401));
     }
 
-    // Compare passwords
     const isPasswordCorrect = await user.comparePassword(password);
     if (!isPasswordCorrect) {
       return next(new AppError('Invalid email or password', 401));
     }
-    // Require email verification before allowing login
-        if (!user.isVerified) {
-          return next(
-            new AppError(
-              'Please verify your email address before logging in.',
-              403
-            )
-          );
-        }
 
-    // Update last login time
+    // Correct password but email not confirmed yet. The code lets the frontend send them
+    // to the verification screen instead of showing a dead-end error.
+    if (!user.isVerified && requireVerification()) {
+      return next(new AppError('Please verify your email to continue.', 403, 'EMAIL_NOT_VERIFIED'));
+    }
+
     user.lastLogin = Date.now();
-    await user.save({ validateBeforeSave: false }); // skip full validation for this update
+    await user.save({ validateBeforeSave: false });
 
     sendTokens(user, 200, res);
   } catch (error) {
@@ -146,11 +186,10 @@ const refreshToken = async (req, res, next) => {
       return next(new AppError('No refresh token. Please log in again.', 401));
     }
 
-    const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 
     const user = await User.findById(decoded.id);
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || (!user.isVerified && requireVerification())) {
       return next(new AppError('User not found. Please log in again.', 401));
     }
 
@@ -164,11 +203,8 @@ const refreshToken = async (req, res, next) => {
 
 // ── POST /api/auth/logout ─────────────────────────────────────
 const logout = (req, res) => {
-  // Clear the refresh token cookie
-  res.cookie('refreshToken', '', {
-    httpOnly: true,
-    expires: new Date(0), // Set expiry to past = delete cookie
-  });
+  // Attributes must match the ones used when the cookie was set, or the browser keeps it
+  res.clearCookie('refreshToken', cookieOptions);
   res.json({ success: true, message: 'Logged out successfully' });
 };
 
@@ -184,32 +220,112 @@ const getMe = async (req, res, next) => {
   }
 };
 
-// ── GET /api/auth/verify/:token ───────────────────────────────
+// ── POST /api/auth/verify-email ───────────────────────────────
+// Body: { email, code }. On success the user is signed in straight away.
 const verifyEmail = async (req, res, next) => {
   try {
-    const { token } = req.params;
-    console.log("========= VERIFY EMAIL =========");
-    console.log("TOKEN FROM URL:", token);
-    const user = await User.findOne({
-      verificationToken: token,
-      verificationTokenExpiry: { $gt: Date.now() }, // token not expired
-    });
-    console.log("FOUND USER:", user ? user.email : "NO USER FOUND");
-    console.log("================================");
+    const { email, code } = req.body;
+    const user = await User.findOne({ email }).select('+verificationCodeHash');
 
-    if (!user) {
-      return next(new AppError('Invalid or expired verification link', 400));
+    // Same message for "no such user" and "wrong code" so this can't be used to probe emails
+    const invalid = new AppError('That code is not correct.', 400, 'INVALID_CODE');
+
+    if (!user) return next(invalid);
+    if (user.isVerified) return next(new AppError('This email is already verified. Please sign in.', 400, 'ALREADY_VERIFIED'));
+
+    if (!user.verificationCodeHash || !user.verificationCodeExpiry || user.verificationCodeExpiry < Date.now()) {
+      return next(new AppError('That code has expired. Request a new one.', 400, 'CODE_EXPIRED'));
+    }
+
+    if (user.verificationAttempts >= MAX_CODE_ATTEMPTS) {
+      user.verificationCodeHash = undefined;
+      user.verificationCodeExpiry = undefined;
+      await user.save({ validateBeforeSave: false });
+      return next(new AppError('Too many wrong attempts. Request a new code.', 429, 'TOO_MANY_ATTEMPTS'));
+    }
+
+    if (!safeEqual(sha256(code), user.verificationCodeHash)) {
+      user.verificationAttempts += 1;
+      await user.save({ validateBeforeSave: false });
+      const left = MAX_CODE_ATTEMPTS - user.verificationAttempts;
+      return next(new AppError(left > 0 ? `That code is not correct. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'Too many wrong attempts. Request a new code.', left > 0 ? 400 : 429, left > 0 ? 'INVALID_CODE' : 'TOO_MANY_ATTEMPTS'));
     }
 
     user.isVerified = true;
-    user.verificationToken = undefined;
-    user.verificationTokenExpiry = undefined;
+    user.verificationCodeHash = undefined;
+    user.verificationCodeExpiry = undefined;
+    user.verificationAttempts = 0;
+    user.lastLogin = Date.now();
     await user.save({ validateBeforeSave: false });
 
-    res.json({ success: true, message: 'Email verified successfully. You can now log in.' });
+    sendTokens(user, 200, res);
   } catch (error) {
     next(error);
   }
+};
+
+// ── POST /api/auth/resend-code ────────────────────────────────
+// Body: { email }. Always answers the same way unless the cooldown applies,
+// so it doesn't reveal which emails are registered.
+const resendCode = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    const generic = { success: true, message: 'If that account is waiting for verification, a new code is on its way.' };
+
+    if (!user || user.isVerified) return res.json(generic);
+
+    const wait = user.verificationLastSent ? RESEND_COOLDOWN_MS - (Date.now() - user.verificationLastSent.getTime()) : 0;
+    if (wait > 0) {
+      const secs = Math.ceil(wait / 1000);
+      return res.status(429).json({ success: false, message: `Please wait ${secs}s before requesting another code.`, code: 'COOLDOWN', retryAfter: secs });
+    }
+
+    const { emailSent } = await issueVerificationCode(user);
+    if (!emailSent && isProd) {
+      return next(new AppError('We could not send the email right now. Please try again shortly.', 502, 'EMAIL_FAILED'));
+    }
+    res.json({ ...generic, retryAfter: Math.ceil(RESEND_COOLDOWN_MS / 1000) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── POST /api/auth/guest ──────────────────────────────────────
+// One-click demo account: its own empty portfolio/watchlist, deleted after GUEST_TTL_DAYS.
+const GUEST_TTL_DAYS = 7;
+const createGuest = async (req, res, next) => {
+  try {
+    const id = crypto.randomBytes(6).toString('hex');
+    const user = await User.create({
+      name: 'Guest',
+      email: `guest-${id}@guest.finsight.app`,
+      password: crypto.randomBytes(24).toString('hex'), // nobody logs in with it; the session comes from the token
+      isVerified: true,
+      isGuest: true,
+    });
+    await Portfolio.create({ user: user._id });
+    await Watchlist.create({ user: user._id });
+    sendTokens(user, 201, res);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Deletes guest accounts (and everything they own) older than GUEST_TTL_DAYS.
+const cleanupGuests = async () => {
+  const Chat = require('../models/Chat');
+  const cutoff = new Date(Date.now() - GUEST_TTL_DAYS * 24 * 60 * 60 * 1000);
+  const stale = await User.find({ isGuest: true, createdAt: { $lt: cutoff } }).select('_id');
+  if (!stale.length) return 0;
+  const ids = stale.map((u) => u._id);
+  await Promise.all([
+    Portfolio.deleteMany({ user: { $in: ids } }),
+    Watchlist.deleteMany({ user: { $in: ids } }),
+    Chat.deleteMany({ user: { $in: ids } }),
+  ]);
+  await User.deleteMany({ _id: { $in: ids } });
+  return ids.length;
 };
 
 // ── POST /api/auth/forgot-password ───────────────────────────
@@ -224,11 +340,10 @@ const forgotPassword = async (req, res, next) => {
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    user.passwordResetToken = resetToken;
+    user.passwordResetToken = sha256(resetToken); // only the hash is stored
     user.passwordResetExpiry = Date.now() + 60 * 60 * 1000; // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    const { sendPasswordResetEmail } = require('../utils/sendEmail');
     try {
       await sendPasswordResetEmail(user.email, user.name, resetToken);
     } catch (emailError) {
@@ -251,7 +366,7 @@ const resetPassword = async (req, res, next) => {
     const { password } = req.body;
 
     const user = await User.findOne({
-      passwordResetToken: token,
+      passwordResetToken: sha256(token),
       passwordResetExpiry: { $gt: Date.now() },
     });
 
@@ -260,6 +375,7 @@ const resetPassword = async (req, res, next) => {
     }
 
     user.password = password; // will be hashed by pre-save hook
+    user.isVerified = true;   // they just proved they own this mailbox
     user.passwordResetToken = undefined;
     user.passwordResetExpiry = undefined;
     await user.save();
@@ -270,4 +386,4 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, refreshToken, logout, getMe, verifyEmail, forgotPassword, resetPassword };
+module.exports = { register, login, refreshToken, logout, getMe, verifyEmail, resendCode, createGuest, cleanupGuests, forgotPassword, resetPassword };

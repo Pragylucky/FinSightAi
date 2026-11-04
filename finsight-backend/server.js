@@ -29,6 +29,11 @@ const userRoutes = require('./routes/user');
 // ── Create Express app ───────────────────────────────────────
 const app = express();
 
+// Behind a proxy (Render, Railway, Vercel...) the real client IP and HTTPS flag come from
+// X-Forwarded-* headers. Without this, rate limiting treats every user as one IP and
+// secure cookies are not set.
+app.set('trust proxy', 1);
+
 // ── Connect to MongoDB ───────────────────────────────────────
 connectDB();
 
@@ -128,6 +133,15 @@ app.listen(PORT, () => {
   ║  Environment: ${process.env.NODE_ENV || 'development'}              ║
   ╚═══════════════════════════════════════╝
   `);
+});
+
+// Nightly cleanup of expired guest accounts (03:30 server time)
+const cron = require('node-cron');
+const { cleanupGuests } = require('./controllers/authController');
+cron.schedule('30 3 * * *', () => {
+  cleanupGuests()
+    .then((n) => n && console.log(`🧹 Removed ${n} expired guest account(s)`))
+    .catch((e) => console.error('Guest cleanup failed:', e.message));
 });
 
 // Handle unhandled promise rejections (async errors not caught by try/catch)

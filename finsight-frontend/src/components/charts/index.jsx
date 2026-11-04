@@ -19,7 +19,7 @@ import {
   Line,
 } from 'recharts';
 import { useState } from 'react';
-import { generateStockChartData } from '../../data/mockData';
+import { COLORS } from '../../lib/theme';
 
 // TIME RANGE BUTTONS — 1W, 1M, 3M, 6M, 1Y
 const timeRanges = [
@@ -36,7 +36,7 @@ function CustomTooltip({ active, payload, label }) {
     return (
       <div className="custom-tooltip text-sm">
         <p className="text-text-muted text-xs mb-1">{label}</p>
-        <p className="font-mono font-bold text-accent-cyan">
+        <p className="font-mono font-bold text-accent-primary">
           ₹{payload[0].value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
         </p>
       </div>
@@ -47,18 +47,14 @@ function CustomTooltip({ active, payload, label }) {
 
 // ─── StockChart ───────────────────────────────────────────────────────────────
 export function StockChart({
-  basePrice = 3800,
   isPositive = true,
   chartData = [],
   onRangeChange,
 }) {
   const [activeRange, setActiveRange] = useState('1M');
-  const days = timeRanges.find(r => r.label === activeRange)?.days || 30;
-  const data = chartData.length > 0
-  ? chartData
-  : generateStockChartData(basePrice, days);
+  const data = chartData;
 
-  const color = isPositive ? '#00E676' : '#FF3B5C';
+  const color = isPositive ? COLORS.bull : COLORS.bear;
   const gradientId = `gradient-${isPositive ? 'bull' : 'bear'}`;
 
   return (
@@ -75,7 +71,7 @@ export function StockChart({
             className={`
               px-3 py-1 rounded-md text-xs font-semibold transition-all
               ${activeRange === label
-                ? 'bg-accent-cyan text-bg-primary'
+                ? 'bg-accent-primary text-bg-primary'
                 : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
               }
             `}
@@ -85,9 +81,11 @@ export function StockChart({
         ))}
       </div>
 
-      {/* The actual chart */}
+      {data.length === 0 ? (
+        <div className="h-[280px] flex items-center justify-center text-sm text-text-muted">No price history available.</div>
+      ) : (
       <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           {/* Gradient fill under the line */}
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -97,55 +95,56 @@ export function StockChart({
           </defs>
 
           {/* Grid lines */}
-          <CartesianGrid strokeDasharray="3 3" stroke="#1E2D45" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
 
           {/* X axis — dates */}
           <XAxis
             dataKey="date"
-            tick={{ fill: '#4A5568', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+            tick={{ fill: COLORS.axis, fontSize: 11, fontFamily: 'JetBrains Mono' }}
             tickLine={false}
             axisLine={false}
-            interval={Math.floor(days / 6)}
+            interval={Math.max(0, Math.floor(data.length / 6))}
           />
 
           {/* Y axis — prices */}
           <YAxis
-            tick={{ fill: '#4A5568', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+            tick={{ fill: COLORS.axis, fontSize: 11, fontFamily: 'JetBrains Mono' }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => `₹${(v / 1000).toFixed(1)}k`}
+            tickFormatter={(v) => v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            width={56}
             domain={['auto', 'auto']}
           />
 
           {/* Hover tooltip */}
-          <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#1E2D45', strokeWidth: 1 }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: COLORS.grid, strokeWidth: 1 }} />
 
           {/* The area fill + line */}
           <Area
             type="monotone"
+            animationDuration={900}
             dataKey="price"
             stroke={color}
             strokeWidth={2}
             fill={`url(#${gradientId})`}
             dot={false}
-            activeDot={{ r: 4, fill: color, stroke: '#0B0F1A', strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: color, stroke: COLORS.bg, strokeWidth: 2 }}
           />
         </AreaChart>
       </ResponsiveContainer>
+      )}
     </div>
   );
 }
 
 // ─── VolumeChart ──────────────────────────────────────────────────────────────
-export function VolumeChart({ basePrice = 3800, chartData = [] }) {
-  const data = chartData.length > 0
-    ? chartData
-    : generateStockChartData(basePrice, 30);
+export function VolumeChart({ chartData = [] }) {
+  const data = chartData;
 
   return (
     <ResponsiveContainer width="100%" height={80}>
       <BarChart data={data} margin={{ top: 0, right: 5, left: -20, bottom: 0 }}>
-        <Bar dataKey="volume" fill="#1E2D45" radius={[2, 2, 0, 0]} />
+        <Bar dataKey="volume" fill={COLORS.grid} radius={[2, 2, 0, 0]} />
         <XAxis dataKey="date" hide />
         <YAxis hide />
         <Tooltip
@@ -193,7 +192,7 @@ export function PortfolioPieChart({ data }) {
             content={({ active, payload }) => active && payload?.length ? (
               <div className="custom-tooltip text-xs">
                 <p className="font-semibold text-text-primary">{payload[0].name}</p>
-                <p className="font-mono text-accent-cyan">{payload[0].value}%</p>
+                <p className="font-mono text-accent-primary">{payload[0].value}%</p>
               </div>
             ) : null}
           />
@@ -203,7 +202,7 @@ export function PortfolioPieChart({ data }) {
       {/* Legend */}
       <div className="space-y-2 flex-1">
         {data.map((item, i) => (
-          <div key={i} className="flex items-center justify-between">
+          <div key={i} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: item.color }} />
               <span className="text-sm text-text-secondary">{item.name}</span>
@@ -223,20 +222,20 @@ export function PortfolioLineChart({ data }) {
       <LineChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#00D4FF" stopOpacity={0.2} />
-            <stop offset="95%" stopColor="#00D4FF" stopOpacity={0} />
+            <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.2} />
+            <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1E2D45" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
         <XAxis
           dataKey="date"
-          tick={{ fill: '#4A5568', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+          tick={{ fill: COLORS.axis, fontSize: 11, fontFamily: 'JetBrains Mono' }}
           tickLine={false}
           axisLine={false}
           interval={6}
         />
         <YAxis
-          tick={{ fill: '#4A5568', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+          tick={{ fill: COLORS.axis, fontSize: 11, fontFamily: 'JetBrains Mono' }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => `₹${(v / 100000).toFixed(0)}L`}
@@ -246,7 +245,7 @@ export function PortfolioLineChart({ data }) {
           content={({ active, payload, label }) => active && payload?.length ? (
             <div className="custom-tooltip text-sm">
               <p className="text-text-muted text-xs mb-1">{label}</p>
-              <p className="font-mono font-bold text-accent-cyan">
+              <p className="font-mono font-bold text-accent-primary">
                 ₹{payload[0].value.toLocaleString('en-IN')}
               </p>
             </div>
@@ -255,10 +254,10 @@ export function PortfolioLineChart({ data }) {
         <Line
           type="monotone"
           dataKey="value"
-          stroke="#00D4FF"
+          stroke={COLORS.primary}
           strokeWidth={2}
           dot={false}
-          activeDot={{ r: 4, fill: '#00D4FF', stroke: '#0B0F1A', strokeWidth: 2 }}
+          activeDot={{ r: 4, fill: COLORS.primary, stroke: COLORS.bg, strokeWidth: 2 }}
         />
       </LineChart>
     </ResponsiveContainer>

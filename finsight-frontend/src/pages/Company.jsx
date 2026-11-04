@@ -1,607 +1,425 @@
-// Company.jsx
+// Company.jsx — one company: quote, chart, financials, AI analysis, news
 
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  TrendingUp, TrendingDown, Star, StarOff, Share2, Bookmark,
-  CheckCircle2, XCircle, Zap, AlertTriangle, ChevronDown, ChevronUp,
-  BarChart3, FileText,
-} from 'lucide-react';
-import { Card, Badge, Tabs, RiskMeter, ChangeBadge, SectionHeader } from '../components/ui';
+import { TrendingUp, TrendingDown, Star, StarOff, Share2, Check, CheckCircle2, XCircle, Zap, AlertTriangle, ChevronDown, ChevronUp, SearchX } from 'lucide-react';
+import { Card, Badge, Tabs, RiskMeter, SectionHeader, EmptyState, LoadingSkeleton } from '../components/ui';
 import { StockChart, VolumeChart } from '../components/charts';
-import { companyData, generateStockChartData } from '../data/mockData';
+import { motion } from 'framer-motion';
+import { Stagger, Item, CountUp } from '../components/motion';
+import { EASE } from '../lib/motion';
 import api from '../services/api';
 
-// A single key financial metric box
+const CR = 10_000_000; // 1 crore
+
+// Market cap / revenue arrive as raw numbers in the stock's currency.
+function money(n, currency = 'INR') {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n === 0) return '—';
+  if (currency === 'INR') {
+    const cr = n / CR;
+    if (cr >= 100000) return `₹${(cr / 100000).toFixed(2)} L Cr`;
+    return `₹${cr.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`;
+  }
+  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  return `$${(n / 1e6).toFixed(0)}M`;
+}
+const fixed = (n, d = 2) => (typeof n === 'number' && Number.isFinite(n) && n !== 0 ? n.toFixed(d) : '—');
+const crore = (n) => (typeof n === 'number' ? (n / CR).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—');
+const growth = (cur, prev) => (cur && prev ? ((cur - prev) / Math.abs(prev)) * 100 : null);
+
 function MetricBox({ label, value, highlight = false }) {
   return (
     <div className="bg-bg-tertiary rounded-lg p-3 border border-bg-border">
       <p className="text-xs text-text-muted mb-1">{label}</p>
-      <p className={`font-mono font-bold text-sm ${highlight ? 'text-accent-cyan' : 'text-text-primary'}`}>
-        {value}
-      </p>
+      <p className={`font-mono font-bold text-sm ${highlight ? 'text-accent-primary' : 'text-text-primary'}`}>{value}</p>
     </div>
   );
 }
 
-// Expandable pros/cons list item
 function ProsConsItem({ text, type }) {
-  const isPos = type === 'pro';
+  const pro = type === 'pro';
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-lg ${isPos ? 'bg-accent-green/5 border border-accent-green/15' : 'bg-accent-red/5 border border-accent-red/15'}`}>
-      {isPos
-        ? <CheckCircle2 size={15} className="text-accent-green mt-0.5 shrink-0" />
-        : <XCircle size={15} className="text-accent-red mt-0.5 shrink-0" />
-      }
+    <div className={`flex items-start gap-3 p-3 rounded-lg ${pro ? 'bg-accent-green/5 border border-accent-green/15' : 'bg-accent-red/5 border border-accent-red/15'}`}>
+      {pro ? <CheckCircle2 size={15} className="text-accent-green mt-0.5 shrink-0" /> : <XCircle size={15} className="text-accent-red mt-0.5 shrink-0" />}
       <p className="text-sm text-text-secondary leading-relaxed">{text}</p>
     </div>
   );
 }
 
-// Quarterly results mock
-const quarterlyResults = [
-  { q: 'Q3 FY25', rev: '63,092', revG: '+8.7%', np: '12,380', npG: '+11.2%', margin: '24.5%' },
-  { q: 'Q2 FY25', rev: '59,692', revG: '+8.9%', np: '11,909', npG: '+10.8%', margin: '24.2%' },
-  { q: 'Q1 FY25', rev: '59,380', revG: '+9.1%', np: '11,724', npG: '+9.7%', margin: '23.9%' },
-  { q: 'Q4 FY24', rev: '61,237', revG: '+6.8%', np: '12,434', npG: '+6.4%', margin: '24.0%' },
-];
+function Growth({ value }) {
+  if (value == null) return <span className="text-text-muted">—</span>;
+  return <span className={value >= 0 ? 'text-accent-green' : 'text-accent-red'}>{value >= 0 ? '+' : ''}{value.toFixed(1)}%</span>;
+}
 
+// Keyed by symbol so navigating between companies remounts with fresh state.
 export default function Company() {
-  // useParams gets the :symbol from the URL
   const { symbol = 'TCS' } = useParams();
+  return <CompanyView key={symbol.toUpperCase()} sym={symbol.toUpperCase()} />;
+}
+
+function CompanyView({ sym }) {
   const navigate = useNavigate();
-  
+
   const [tab, setTab] = useState('overview');
-  const [realCompany, setRealCompany] = useState(null);
-  const [apiError, setApiError] = useState('');
-  const [chartData, setChartData] = useState([]);
-  const realQuarterlyResults = (
-  realCompany?.company?.quarterlyResults || []
-).map((item, index, arr) => {
-  const previous = arr[index + 1];
+  const [state, setState] = useState({ company: null, chart: [], loading: true, error: '' });
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [watchMsg, setWatchMsg] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [fullSummary, setFullSummary] = useState(false);
 
-  const revenueGrowth =
-    previous?.revenue && item.revenue
-      ? ((item.revenue - previous.revenue) / previous.revenue) * 100
-      : null;
-
-  const profitGrowth =
-    previous?.netIncome && item.netIncome
-      ? ((item.netIncome - previous.netIncome) / previous.netIncome) * 100
-      : null;
-
-  return {
-    ...item,
-    revenueGrowth,
-    profitGrowth,
-  };
-});
   useEffect(() => {
-  const fetchCompany = async () => {
+    let cancelled = false;
+    Promise.all([api.company.get(sym), api.company.getChart(sym, 30)])
+      .then(([c, ch]) => !cancelled && setState({ company: c.company, chart: ch.data || [], loading: false, error: '' }))
+      .catch((err) => !cancelled && setState({ company: null, chart: [], loading: false, error: err.message }));
+    return () => { cancelled = true; };
+  }, [sym]);
+
+  // Is this stock already on the user's watchlist?
+  useEffect(() => {
+    let cancelled = false;
+    api.watchlist.get()
+      .then((r) => !cancelled && setInWatchlist((r.watchlist?.stocks || []).some((s) => s.symbol === sym)))
+      .catch(() => !cancelled && setInWatchlist(false));
+    return () => { cancelled = true; };
+  }, [sym]);
+
+  const loadRange = useCallback(async (days) => {
     try {
-      setApiError('');
+      const r = await api.company.getChart(sym, days);
+      setState((s) => ({ ...s, chart: r.data || [] }));
+    } catch { /* keep the current chart */ }
+  }, [sym]);
 
-      const [companyDataResponse, chartDataResponse] = await Promise.all([
-        api.company.get(symbol.toUpperCase()),
-        api.company.getChart(symbol.toUpperCase(), 30),
-      ]);
-
-      console.log(
-        'REAL COMPANY DATA:',
-        JSON.stringify(companyDataResponse, null, 2)
-      );
-      console.log(
-        '🔥 QUARTERLY RESULTS:',
-        companyDataResponse?.company?.quarterlyResults
-      );
-      console.log(
-        '🔥 FIRST QUARTER:',
-        companyDataResponse?.company?.quarterlyResults?.[0]
-      );
-
-      console.log(
-        'REAL CHART DATA:',
-        JSON.stringify(chartDataResponse, null, 2)
-      );
-      console.log(
-        '📰 RAW COMPANY NEWS:',
-        companyDataResponse?.company?.news
-      );
-
-      setRealCompany(companyDataResponse);
-      setChartData(chartDataResponse.data || []);
+  const toggleWatchlist = async () => {
+    const c = state.company;
+    if (!c) return;
+    setWatchMsg('');
+    try {
+      if (inWatchlist) await api.watchlist.remove(sym);
+      else await api.watchlist.add({ symbol: sym, name: c.name });
+      setInWatchlist(!inWatchlist);
     } catch (err) {
-      console.error('COMPANY API ERROR:', err);
-      setApiError(err.message);
+      setWatchMsg(err.message);
     }
   };
 
-  fetchCompany();
-}, [symbol]);
-  const [inWatchlist, setInWatchlist] = useState(false);
-  const [showFullSummary, setShowFullSummary] = useState(false);
+  const share = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard blocked */ }
+  };
 
-  // Get company data — if symbol not in our mock, show TCS
-  // Mock data is kept temporarily as fallback for fields
-// that the backend does not provide yet
-const mockCompany =
-  companyData[symbol.toUpperCase()] || companyData['TCS'];
+  const { company: c, chart, loading, error } = state;
 
-const realData = realCompany?.company;
-const quote = realData?.quote;
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <Card><div className="space-y-4"><div className="skeleton h-10 w-48" /><div className="skeleton h-9 w-64" /><LoadingSkeleton lines={2} /></div></Card>
+        <Card><div className="skeleton h-72 w-full" /></Card>
+      </div>
+    );
+  }
 
-// Merge REAL backend data with existing mock data
-const company = {
-  ...mockCompany,
+  if (error || !c) {
+    return (
+      <Card>
+        <EmptyState
+          icon={SearchX}
+          title={`Couldn't load ${sym}`}
+          description={error || 'No data came back for this symbol.'}
+          action={<button onClick={() => navigate('/dashboard')} className="btn-secondary text-sm py-2">Back to dashboard</button>}
+        />
+      </Card>
+    );
+  }
 
-  // Real company identity/profile when available
-  symbol: realData?.symbol || mockCompany.symbol,
-  name: realData?.name || mockCompany.name,
-  sector: realData?.sector || mockCompany.sector,
+  const q = c.quote || {};
+  const currency = c.currency || 'INR';
+  const cur = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : '';
+  const price = q.price ?? 0;
+  const isPositive = (q.changePercent ?? 0) >= 0;
+  const ai = c.aiAnalysis;
+  const news = c.news || [];
 
-  // REAL Yahoo Finance quote
-  price: quote?.price ?? mockCompany.price,
-  changeAmt: quote?.change ?? mockCompany.changeAmt,
-  change: quote?.changePercent ?? mockCompany.change,
+  // Newest first; growth is vs the next (older) entry
+  const results = (c.quarterlyResults || []).map((r, i, arr) => ({
+    ...r,
+    revG: growth(r.revenue, arr[i + 1]?.revenue),
+    profG: growth(r.netIncome, arr[i + 1]?.netIncome),
+    margin: r.revenue && r.operatingIncome ? (r.operatingIncome / r.revenue) * 100 : null,
+  }));
 
-  open: quote?.open ?? mockCompany.open,
-  high: quote?.high ?? mockCompany.high,
-  low: quote?.low ?? mockCompany.low,
-  prevClose: quote?.prevClose ?? mockCompany.prevClose,
-
-  // Profile metrics — real when backend provides them
-  marketCap: realData?.marketCap || mockCompany.marketCap,
-  pe: realData?.pe ?? mockCompany.pe,
-  pb: realData?.pb ?? mockCompany.pb,
-  eps: realData?.eps ?? mockCompany.eps,
-  roe: realData?.roe ?? mockCompany.roe,
-  dividendYield: realData?.dividendYield ?? mockCompany.dividendYield,
-  debtToEquity: realData?.debtToEquity ?? mockCompany.debtToEquity,
-  week52High:
-    realData?.week52High || mockCompany.week52High,
-  week52Low:
-    realData?.week52Low || mockCompany.week52Low,
-
- 
-  // Real company news from backend
-  news: realData?.news || [],
- // AI analysis — real when available
-  aiSummary:
-    realData?.aiAnalysis?.summary || mockCompany.aiSummary,
-};
-
-const isPositive = company.change >= 0;
+  const range = c.week52High && c.week52Low ? c.week52High - c.week52Low : 0;
+  const rangePos = range > 0 ? Math.min(100, Math.max(0, ((price - c.week52Low) / range) * 100)) : null;
 
   const tabs = [
     { label: 'Overview', value: 'overview' },
     { label: 'Financials', value: 'financials' },
-    { label: 'AI Analysis', value: 'ai' },
+    { label: 'AI analysis', value: 'ai' },
     { label: 'News', value: 'news' },
   ];
 
+  const quick = [
+    ['Open', q.open], ['High', q.high], ['Low', q.low], ['Prev close', q.prevClose],
+    ['Volume', q.volume ? q.volume.toLocaleString('en-IN') : null],
+    ['52W high', c.week52High], ['52W low', c.week52Low],
+  ];
+
   return (
-    <div className="space-y-5 page-enter">
-      {/* ── STOCK HEADER ──────────────────────────────────────────────── */}
-      <Card>
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          {/* Left: Name + price */}
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              {/* Symbol badge */}
-              <div className="w-10 h-10 rounded-lg bg-bg-tertiary border border-bg-border flex items-center justify-center">
-                <span className="font-mono font-bold text-accent-cyan">{company.symbol[0]}</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="font-display font-bold text-xl text-text-primary">{company.symbol}</h1>
-                  <Badge variant="cyan">{company.sector}</Badge>
-                </div>
-                <p className="text-text-secondary text-sm">{company.name}</p>
-              </div>
-            </div>
-
-            {/* Price */}
-            <div className="flex items-end gap-3 mt-3">
-              <span className="font-mono font-bold text-3xl text-text-primary">
-                ₹{company.price.toLocaleString('en-IN')}
-              </span>
-              <div className={`flex items-center gap-1 pb-1 font-mono font-semibold ${isPositive ? 'text-accent-green' : 'text-accent-red'}`}>
-                {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                {isPositive ? '+' : ''}₹{company.changeAmt.toFixed(2)} ({isPositive ? '+' : ''}{company.change.toFixed(2)}%)
-              </div>
-            </div>
-            <p className="text-text-muted text-xs mt-1">NSE · Last updated just now · Market open</p>
-          </div>
-
-          {/* Right: Action buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setInWatchlist(!inWatchlist)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-                inWatchlist
-                  ? 'bg-accent-yellow/10 border-accent-yellow/30 text-accent-yellow'
-                  : 'border-bg-border text-text-secondary hover:border-accent-yellow/30 hover:text-accent-yellow'
-              }`}
-            >
-              {inWatchlist ? <Star size={15} fill="currentColor" /> : <StarOff size={15} />}
-              {inWatchlist ? 'Watching' : 'Watchlist'}
-            </button>
-            <button className="p-2 border border-bg-border rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-all">
-              <Share2 size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Quick stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-5 pt-4 border-t border-bg-border text-xs">
-          {[
-            ['Open', `₹${company.open.toLocaleString()}`],
-            ['High', `₹${company.high.toLocaleString()}`],
-            ['Low', `₹${company.low.toLocaleString()}`],
-            ['Prev Close', `₹${company.prevClose.toLocaleString()}`],
-            ['Volume', company.volume],
-            ['Avg Vol', company.avgVolume],
-            ['52W High', `₹${company.week52High.toLocaleString()}`],
-            ['52W Low', `₹${company.week52Low.toLocaleString()}`],
-          ].map(([l, v]) => (
-            <div key={l}>
-              <p className="text-text-muted">{l}</p>
-              <p className="font-mono font-semibold text-text-primary mt-0.5">{v}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* ── TABS ──────────────────────────────────────────────────────── */}
-      <Tabs tabs={tabs} activeTab={tab} onChange={setTab} />
-
-      {/* ── OVERVIEW TAB ──────────────────────────────────────────────── */}
-      {tab === 'overview' && (
-        <div className="space-y-5">
-          {/* Chart */}
-          <Card>
-            <SectionHeader title="Price Chart" subtitle={company.symbol + ' · NSE'} />
-            <StockChart
-              basePrice={company.price}
-              isPositive={isPositive}
-              chartData={chartData}
-            />
-            <div className="mt-3 border-t border-bg-border pt-3">
-              <p className="text-xs text-text-muted mb-1">Volume</p>
-              <VolumeChart
-                basePrice={company.price}
-                chartData={chartData}
-              />
-            </div>
-          </Card>
-
-          {/* Key Metrics */}
-          <Card>
-            <SectionHeader title="Key Metrics" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              <MetricBox label="Market Cap" value={company.marketCap} highlight />
-              <MetricBox label="PE Ratio" value={company.pe} />
-              <MetricBox label="PB Ratio" value={company.pb} />
-              <MetricBox label="EPS (TTM)" value={`₹${company.eps}`} />
-              <MetricBox label="Dividend Yield" value={`${company.dividendYield}%`} />
-              <MetricBox label="ROE" value={`${company.roe}%`} highlight />
-              <MetricBox label="Debt/Equity" value={company.debtToEquity} />
-              <MetricBox label="Revenue" value={company.revenue} />
-            </div>
-          </Card>
-
-          {/* 52-Week Range */}
-          <Card>
-            <SectionHeader title="52-Week Range" />
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm text-text-secondary">
-                <span className="font-mono text-accent-red">₹{company.week52Low.toLocaleString()}</span>
-                <span className="font-mono text-accent-green">₹{company.week52High.toLocaleString()}</span>
-              </div>
-              {/* Range bar with current price indicator */}
-              <div className="relative h-3 bg-bg-tertiary rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-accent-red via-accent-yellow to-accent-green"
-                  style={{ width: '100%' }}
-                />
-                {/* Current price pointer */}
-                <div
-                  className="absolute top-0 w-3 h-3 rounded-full bg-white border-2 border-bg-primary shadow-md"
-                  style={{
-                    left: `${((company.price - company.week52Low) / (company.week52High - company.week52Low)) * 100}%`,
-                    transform: 'translateX(-50%)',
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-text-muted">
-                <span>52W Low</span>
-                <span className="font-mono text-text-primary font-semibold">Current: ₹{company.price.toLocaleString()}</span>
-                <span>52W High</span>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* ── FINANCIALS TAB ────────────────────────────────────────────── */}
-      {tab === 'financials' && (
-        <div className="space-y-5">
-          {/* Revenue & Profit */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card>
-              <p className="text-text-muted text-sm mb-1">Total Revenue</p>
-              <p className="font-mono font-bold text-2xl text-text-primary">{realQuarterlyResults?.[0]?.revenue
-            ? `₹${(realQuarterlyResults[0].revenue / 10000000).toLocaleString('en-IN', {
-                maximumFractionDigits: 0,
-              })} Cr`
-              : '—'}
-            </p>
-              
-            </Card>
-            <Card>
-              <p className="text-text-muted text-sm mb-1">Net Profit</p>
-              <p className="font-mono font-bold text-2xl text-text-primary">{realQuarterlyResults?.[0]?.netIncome
-                  ? `₹${(realQuarterlyResults[0].netIncome / 10000000).toLocaleString('en-IN', {
-                      maximumFractionDigits: 0,
-                    })} Cr`
-                  : '—'}
-              </p>
-
-            </Card>
-          </div>
-
-          {/* Quarterly Results Table */}
-          <Card>
-            <SectionHeader title="Quarterly Results" subtitle="Revenue & Profit (Rs Crores)" />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-sm">
-              <thead>
-                <tr className="border-b border-bg-border text-left">
-                  <th className="pb-3 px-2 text-text-muted text-xs font-medium">
-                    Quarter
-                  </th>
-                  <th className="pb-3 px-2 text-text-muted text-xs font-medium">
-                    Revenue
-                  </th>
-                  <th className="pb-3 px-2 text-text-muted text-xs font-medium">
-                    Rev Growth
-                  </th>
-                  <th className="pb-3 px-2 text-text-muted text-xs font-medium">
-                    Net Profit
-                  </th>
-                  <th className="pb-3 px-2 text-text-muted text-xs font-medium">
-                    Profit Growth
-                  </th>
-                  <th className="pb-3 px-2 text-text-muted text-xs font-medium">
-                    Margin
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {realQuarterlyResults.map((r, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-bg-border last:border-0"
-                  >
-                    {/* Quarter */}
-                    <td className="py-3 px-2 font-medium text-text-primary font-mono text-xs">
-                      {new Date(r.date).toLocaleDateString('en-IN', {
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </td>
-
-                    {/* Revenue */}
-                    <td className="py-3 px-2 font-mono text-xs text-text-primary">
-                      {(r.revenue / 10000000).toLocaleString('en-IN', {
-                        maximumFractionDigits: 0,
-                      })}
-                    </td>
-                    <td className="py-3 px-2 font-mono text-xs text-text-primary">
-                      {r.netIncome
-                        ? (r.netIncome / 10000000).toLocaleString('en-IN', {
-                            maximumFractionDigits: 0,
-                          })
-                        : '—'}
-                    </td>
-                    <td className="py-3 px-2 font-mono text-xs text-accent-cyan">
-                      {r.revenue && r.operatingIncome
-                        ? `${((r.operatingIncome / r.revenue) * 100).toFixed(1)}%`
-                        : '—'}
-                    </td>
-
-                    {/* Revenue Growth */}
-                    <td
-                      className={`py-3 px-2 font-mono text-xs ${
-                        r.revenueGrowth == null
-                          ? 'text-text-muted'
-                          : r.revenueGrowth >= 0
-                            ? 'text-accent-green'
-                            : 'text-accent-red'
-                      }`}
-                    >
-                      {r.revenueGrowth == null
-                        ? '—'
-                        : `${r.revenueGrowth >= 0 ? '+' : ''}${r.revenueGrowth.toFixed(1)}%`}
-                    </td>
-
-                    {/* Net Profit */}
-                    <td className="py-3 px-2 font-mono text-xs text-text-primary">
-                      {(r.netIncome / 10000000).toLocaleString('en-IN', {
-                        maximumFractionDigits: 0,
-                      })}
-                    </td>
-
-                    {/* Profit Growth */}
-                    <td
-                      className={`py-3 px-2 font-mono text-xs ${
-                        r.profitGrowth === null
-                          ? 'text-text-muted'
-                          : r.profitGrowth >= 0
-                            ? 'text-accent-green'
-                            : 'text-accent-red'
-                      }`}
-                    >
-                      {r.profitGrowth === null
-                        ? '—'
-                        : `${r.profitGrowth >= 0 ? '+' : ''}${r.profitGrowth.toFixed(1)}%`}
-                    </td>
-
-                    {/* Operating Margin */}
-                    <td className="py-3 px-2 font-mono text-xs text-accent-cyan">
-                      {r.revenue
-                        ? `${((r.operatingIncome / r.revenue) * 100).toFixed(1)}%`
-                        : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-          </Card>
-
-          {/* More metrics */}
-          <Card>
-            <SectionHeader title="Valuation & Efficiency" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <MetricBox
-              label="PE Ratio"
-              value={company.pe ? Number(company.pe).toFixed(2) : '—'}
-              highlight
-            />
-             <MetricBox
-                label="PB Ratio"
-                value={company.pb ? Number(company.pb).toFixed(2) : '—'}
-              />
-              <MetricBox label="ROE" value={`${company.roe}%`} highlight />
-              <MetricBox label="Debt/Equity" value={company.debtToEquity} />
-              <MetricBox label="EPS" value={`₹${company.eps}`} />
-              <MetricBox label="Div. Yield" value={`${company.dividendYield}%`} />
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* ── AI ANALYSIS TAB ───────────────────────────────────────────── */}
-      {tab === 'ai' && (
-        <div className="space-y-5">
-          {/* AI Summary */}
-          <Card className="border-accent-purple/20 bg-gradient-to-br from-accent-purple/5 to-transparent">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-accent-purple/20 flex items-center justify-center">
-                <Zap size={16} className="text-accent-purple" />
-              </div>
-              <div>
-                <h3 className="font-display font-semibold text-text-primary">AI Investment Summary</h3>
-                <p className="text-text-muted text-xs">Powered by FinSight AI · Updated today</p>
-              </div>
-              <Badge variant="purple" className="ml-auto">AI Generated</Badge>
-            </div>
-
-            <p className={`text-text-secondary text-sm leading-relaxed ${!showFullSummary ? 'line-clamp-4' : ''}`}>
-              {company.aiSummary}
-            </p>
-            <button
-              onClick={() => setShowFullSummary(!showFullSummary)}
-              className="flex items-center gap-1 text-xs text-accent-cyan mt-2 hover:underline"
-            >
-              {showFullSummary ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Read full analysis</>}
-            </button>
-          </Card>
-
-          {/* Investment Outlook */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card>
-              <p className="text-text-muted text-sm mb-2">Investment Outlook</p>
-              <Badge variant={company.investmentOutlook === 'Positive' ? 'green' : company.investmentOutlook === 'Neutral' ? 'yellow' : 'red'} className="text-base px-4 py-1.5">
-                {company.investmentOutlook}
-              </Badge>
-            </Card>
-            <Card>
-              <RiskMeter score={company.riskScore} />
-            </Card>
-          </div>
-
-          {/* Pros */}
-          <Card>
-            <SectionHeader title="Strengths" subtitle="Why analysts are bullish" />
-            <div className="space-y-2">
-              {company.pros.map((p, i) => (
-                <ProsConsItem key={i} text={p} type="pro" />
-              ))}
-            </div>
-          </Card>
-
-          {/* Cons */}
-          <Card>
-            <SectionHeader title="Risks & Concerns" subtitle="What to watch out for" />
-            <div className="space-y-2">
-              {company.cons.map((c, i) => (
-                <ProsConsItem key={i} text={c} type="con" />
-              ))}
-            </div>
-          </Card>
-
-          {/* Disclaimer */}
-          <div className="flex items-start gap-2 p-3 bg-accent-yellow/5 border border-accent-yellow/20 rounded-lg">
-            <AlertTriangle size={15} className="text-accent-yellow shrink-0 mt-0.5" />
-            <p className="text-xs text-text-muted leading-relaxed">
-              This analysis is generated by AI using public financial data. It&apos;s for educational purposes only and is not financial advice. Always do your own research before investing.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── NEWS TAB ──────────────────────────────────────────────────── */}
-      {tab === 'news' && (
+    <Stagger className="space-y-5" stagger={0.06}>
+      <Item>
         <Card>
-          <SectionHeader title={`${company.symbol} News`} subtitle="Latest updates from the market" />
-          <div className="space-y-4">
-            {company.news.map((n, i) => (
-              <div key={i} className="flex items-start gap-3 py-3 border-b border-bg-border last:border-0">
-               <Badge
-                variant="cyan"
-                className="mt-0.5 shrink-0"
-              >
-                News
-              </Badge>
-                <div>
-                  <a
-                    href={n.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium text-text-primary hover:text-accent-cyan cursor-pointer transition-colors"
-                  >
-                    {n.title}
-                  </a>
-                  <p className="text-xs text-text-muted mt-1">
-                    {n.source} ·{' '}
-                    {new Date(n.time).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </p>
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-11 h-11 rounded-lg bg-bg-tertiary border border-bg-border flex items-center justify-center">
+                  <span className="font-mono font-bold text-accent-primary">{sym[0]}</span>
                 </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="font-display font-bold text-xl text-text-primary">{sym}</h1>
+                    {c.sector && c.sector !== 'Unknown' && <Badge variant="primary">{c.sector}</Badge>}
+                  </div>
+                  <p className="text-text-secondary text-sm truncate">{c.name}</p>
+                </div>
+              </div>
+
+              <div className="flex items-end gap-3 mt-3 flex-wrap">
+                <span className="font-mono font-bold text-3xl text-text-primary">
+                  <CountUp key={sym} value={price} decimals={2} prefix={cur} />
+                </span>
+                <div className={`flex items-center gap-1 pb-1 font-mono font-semibold ${isPositive ? 'text-accent-green' : 'text-accent-red'}`}>
+                  {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                  {isPositive ? '+' : ''}{cur}{(q.change ?? 0).toFixed(2)} ({isPositive ? '+' : ''}{(q.changePercent ?? 0).toFixed(2)}%)
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={toggleWatchlist}
+                aria-pressed={inWatchlist}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  inWatchlist ? 'bg-accent-warn/10 border-accent-warn/30 text-accent-warn' : 'border-bg-border text-text-secondary hover:border-accent-warn/30 hover:text-accent-warn'
+                }`}
+              >
+                {inWatchlist ? <Star size={15} fill="currentColor" /> : <StarOff size={15} />}
+                {inWatchlist ? 'Watching' : 'Watchlist'}
+              </motion.button>
+              <button onClick={share} aria-label="Copy link" title="Copy link" className="p-2 border border-bg-border rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors">
+                {copied ? <Check size={16} className="text-accent-green" /> : <Share2 size={16} />}
+              </button>
+            </div>
+          </div>
+          {watchMsg && <p role="alert" className="text-xs text-accent-red mt-3">{watchMsg}</p>}
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mt-5 pt-4 border-t border-bg-border text-xs">
+            {quick.map(([l, v]) => (
+              <div key={l}>
+                <p className="text-text-muted">{l}</p>
+                <p className="font-mono font-semibold text-text-primary mt-0.5">
+                  {typeof v === 'number' && v ? `${cur}${v.toLocaleString('en-IN')}` : typeof v === 'string' ? v : '—'}
+                </p>
               </div>
             ))}
           </div>
         </Card>
-      )}
-    </div>
-  );
-  const handleRangeChange = async (days) => {
-  try {
-    const response = await api.company.getChart(
-      symbol.toUpperCase(),
-      days
-    );
+      </Item>
 
-    setChartData(response.data || []);
-  } catch (error) {
-    console.error('Failed to load chart range:', error);
-  }
-};
+      <Item><Tabs tabs={tabs} activeTab={tab} onChange={setTab} /></Item>
+
+      <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE }} className="space-y-5">
+        {tab === 'overview' && (
+          <>
+            <Card>
+              <SectionHeader title="Price chart" subtitle={`${sym}${currency === 'INR' ? ' · NSE' : ''}`} />
+              <StockChart isPositive={isPositive} chartData={chart} onRangeChange={loadRange} />
+              {chart.length > 0 && (
+                <div className="mt-3 border-t border-bg-border pt-3">
+                  <p className="text-xs text-text-muted mb-1">Volume</p>
+                  <VolumeChart chartData={chart} />
+                </div>
+              )}
+            </Card>
+
+            {c.description && (
+              <Card>
+                <SectionHeader title="About" subtitle={c.industry && c.industry !== 'Unknown' ? c.industry : undefined} />
+                <p className={`text-sm text-text-secondary leading-relaxed ${fullSummary ? '' : 'line-clamp-4'}`}>{c.description}</p>
+                <button onClick={() => setFullSummary(!fullSummary)} className="flex items-center gap-1 text-xs text-accent-primary mt-2 hover:underline">
+                  {fullSummary ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Read more</>}
+                </button>
+              </Card>
+            )}
+
+            <Card>
+              <SectionHeader title="Key metrics" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <MetricBox label="Market cap" value={money(c.marketCap, currency)} highlight />
+                <MetricBox label="PE ratio" value={fixed(c.pe)} />
+                <MetricBox label="PB ratio" value={fixed(c.pb)} />
+                <MetricBox label="EPS (TTM)" value={c.eps ? `${cur}${fixed(c.eps)}` : '—'} />
+                <MetricBox label="Dividend yield" value={c.dividendYield ? `${c.dividendYield.toFixed(2)}%` : '—'} />
+                <MetricBox label="ROE" value={c.roe ? `${c.roe.toFixed(1)}%` : '—'} highlight />
+                <MetricBox label="Debt / equity" value={fixed(c.debtToEquity)} />
+                <MetricBox label="Revenue (TTM)" value={money(c.revenue, currency)} />
+              </div>
+            </Card>
+
+            {rangePos !== null && (
+              <Card>
+                <SectionHeader title="52-week range" />
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-mono text-accent-red">{cur}{c.week52Low.toLocaleString('en-IN')}</span>
+                    <span className="font-mono text-accent-green">{cur}{c.week52High.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="relative h-3 bg-bg-tertiary rounded-full">
+                    <div className="h-full rounded-full bg-gradient-to-r from-accent-red via-accent-warn to-accent-green opacity-80" />
+                    <motion.div
+                      className="absolute top-1/2 w-4 h-4 rounded-full bg-white border-2 border-bg-primary shadow-lg shadow-black/50"
+                      style={{ translateX: '-50%', translateY: '-50%' }}
+                      initial={{ left: '0%' }}
+                      animate={{ left: `${rangePos}%` }}
+                      transition={{ duration: 1, ease: EASE }}
+                    />
+                  </div>
+                  <p className="text-center text-xs text-text-muted">Current <span className="font-mono text-text-primary font-semibold">{cur}{price.toLocaleString('en-IN')}</span></p>
+                </div>
+              </Card>
+            )}
+          </>
+        )}
+
+        {tab === 'financials' && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Card>
+                <p className="text-text-muted text-sm mb-1">Latest quarter revenue</p>
+                <p className="font-mono font-bold text-2xl text-text-primary">{results[0]?.revenue ? `₹${crore(results[0].revenue)} Cr` : '—'}</p>
+              </Card>
+              <Card>
+                <p className="text-text-muted text-sm mb-1">Latest quarter net profit</p>
+                <p className="font-mono font-bold text-2xl text-text-primary">{results[0]?.netIncome ? `₹${crore(results[0].netIncome)} Cr` : '—'}</p>
+              </Card>
+            </div>
+
+            <Card>
+              <SectionHeader title="Quarterly results" subtitle="Revenue and profit, ₹ crore" />
+              {results.length === 0 ? (
+                <p className="text-sm text-text-muted py-6 text-center">No quarterly results available for this company.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-sm">
+                    <thead>
+                      <tr className="border-b border-bg-border text-left">
+                        {['Quarter', 'Revenue', 'Rev growth', 'Net profit', 'Profit growth', 'Op. margin'].map((h) => (
+                          <th key={h} className="pb-3 px-2 text-text-muted text-xs font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.map((r, i) => (
+                        <tr key={i} className="border-b border-bg-border last:border-0 hover:bg-bg-tertiary/40 transition-colors">
+                          <td className="py-3 px-2 font-medium text-text-primary font-mono text-xs">
+                            {new Date(r.date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="py-3 px-2 font-mono text-xs text-text-primary">{crore(r.revenue)}</td>
+                          <td className="py-3 px-2 font-mono text-xs"><Growth value={r.revG} /></td>
+                          <td className="py-3 px-2 font-mono text-xs text-text-primary">{r.netIncome ? crore(r.netIncome) : '—'}</td>
+                          <td className="py-3 px-2 font-mono text-xs"><Growth value={r.profG} /></td>
+                          <td className="py-3 px-2 font-mono text-xs text-accent-primary">{r.margin == null ? '—' : `${r.margin.toFixed(1)}%`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <SectionHeader title="Valuation and efficiency" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <MetricBox label="PE ratio" value={fixed(c.pe)} highlight />
+                <MetricBox label="Forward PE" value={fixed(c.forwardPE)} />
+                <MetricBox label="PB ratio" value={fixed(c.pb)} />
+                <MetricBox label="ROE" value={c.roe ? `${c.roe.toFixed(1)}%` : '—'} highlight />
+                <MetricBox label="Net margin" value={c.netMargin ? `${c.netMargin.toFixed(1)}%` : '—'} />
+                <MetricBox label="Revenue growth" value={c.revenueGrowth ? `${c.revenueGrowth.toFixed(1)}%` : '—'} />
+              </div>
+            </Card>
+          </>
+        )}
+
+        {tab === 'ai' && (
+          ai ? (
+            <>
+              <Card className="border-accent-secondary/20 bg-gradient-to-br from-accent-secondary/5 to-transparent">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-accent-secondary/20 flex items-center justify-center"><Zap size={16} className="text-accent-secondary" /></div>
+                  <h3 className="font-display font-semibold text-text-primary">AI summary</h3>
+                  <Badge variant="secondary" className="ml-auto">AI generated</Badge>
+                </div>
+                <p className="text-text-secondary text-sm leading-relaxed">{ai.summary}</p>
+              </Card>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Card>
+                  <p className="text-text-muted text-sm mb-2">Outlook</p>
+                  <Badge variant={ai.outlook === 'Positive' ? 'green' : ai.outlook === 'Neutral' ? 'warn' : 'red'} className="text-base px-4 py-1.5">{ai.outlook}</Badge>
+                </Card>
+                {typeof ai.riskScore === 'number' && <Card><RiskMeter score={ai.riskScore} /></Card>}
+              </div>
+
+              {ai.pros?.length > 0 && (
+                <Card>
+                  <SectionHeader title="Strengths" />
+                  <Stagger className="space-y-2" stagger={0.07}>{ai.pros.map((p, i) => <Item key={i}><ProsConsItem text={p} type="pro" /></Item>)}</Stagger>
+                </Card>
+              )}
+              {ai.cons?.length > 0 && (
+                <Card>
+                  <SectionHeader title="Risks and concerns" />
+                  <Stagger className="space-y-2" stagger={0.07}>{ai.cons.map((p, i) => <Item key={i}><ProsConsItem text={p} type="con" /></Item>)}</Stagger>
+                </Card>
+              )}
+            </>
+          ) : (
+            <Card><EmptyState icon={Zap} title="AI analysis unavailable" description="There wasn't enough fundamental data to generate an analysis for this company right now." /></Card>
+          )
+        )}
+        {tab === 'ai' && (
+          <div className="flex items-start gap-2 p-3 bg-accent-warn/5 border border-accent-warn/20 rounded-lg">
+            <AlertTriangle size={15} className="text-accent-warn shrink-0 mt-0.5" />
+            <p className="text-xs text-text-muted leading-relaxed">Generated by AI from public data. For education only, not financial advice. Do your own research before investing.</p>
+          </div>
+        )}
+
+        {tab === 'news' && (
+          <Card>
+            <SectionHeader title={`${sym} news`} />
+            {news.length === 0 ? (
+              <p className="text-sm text-text-muted py-6 text-center">No recent news for this company.</p>
+            ) : (
+              <div>
+                {news.map((n, i) => (
+                  <a key={i} href={n.url} target="_blank" rel="noopener noreferrer" className="block py-3 border-b border-bg-border last:border-0 group">
+                    <p className="text-sm font-medium text-text-primary group-hover:text-accent-primary transition-colors">{n.title}</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      {n.source}{n.time ? ` · ${new Date(n.time).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                    </p>
+                  </a>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+      </motion.div>
+    </Stagger>
+  );
 }

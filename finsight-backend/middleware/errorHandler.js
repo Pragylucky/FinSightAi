@@ -7,9 +7,10 @@
 
 // Custom error class — lets us throw errors with a status code attached
 class AppError extends Error {
-  constructor(message, statusCode) {
+  constructor(message, statusCode, code) {
     super(message);
     this.statusCode = statusCode;
+    this.code = code; // optional machine-readable code, e.g. 'EMAIL_NOT_VERIFIED'
     this.isOperational = true; // vs unexpected bugs — we handle these gracefully
     Error.captureStackTrace(this, this.constructor);
   }
@@ -29,7 +30,7 @@ const globalErrorHandler = (err, req, res, next) => {
 
   // ── Mongoose Errors ──────────────────────────────────────
   // Duplicate key (e.g., email already registered)
-  if (err.code === 11000) {
+  if (err.code === 11000 && err.keyValue) {
     const field = Object.keys(err.keyValue)[0];
     message = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`;
     statusCode = 400;
@@ -64,6 +65,7 @@ const globalErrorHandler = (err, req, res, next) => {
   res.status(statusCode).json({
     success: false,
     message,
+    ...(err.isOperational && typeof err.code === 'string' && { code: err.code }),
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };

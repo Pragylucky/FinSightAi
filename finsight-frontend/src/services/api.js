@@ -45,8 +45,12 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Auth endpoints return 401 for bad credentials / dead refresh tokens.
+    // Refreshing for those would deadlock (the refresh call itself would queue behind itself).
+    const isAuthCall = /\/auth\/(login|register|refresh|forgot-password|reset-password)/.test(originalRequest?.url || '');
+
     // If 401 and we haven't already retried this request
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthCall) {
       if (isRefreshing) {
         // If refresh is in progress, queue this request
         return new Promise((resolve, reject) => {
@@ -81,8 +85,16 @@ axiosInstance.interceptors.response.use(
     }
 
     // Extract error message from backend response
-    const message = error.response?.data?.message || 'Something went wrong';
-    return Promise.reject(new Error(message));
+    const message = error.response?.data?.message
+      || (error.code === 'ECONNABORTED' ? 'The request timed out. Please try again.' : null)
+      || (error.request && !error.response ? 'Cannot reach the server. Check your connection.' : null)
+      || 'Something went wrong';
+    // Keep the server's machine-readable code / status so screens can react (e.g. EMAIL_NOT_VERIFIED)
+    const err = new Error(message);
+    err.code = error.response?.data?.code;
+    err.status = error.response?.status;
+    err.retryAfter = error.response?.data?.retryAfter;
+    return Promise.reject(err);
   }
 );
 
@@ -93,11 +105,13 @@ const api = {
   auth: {
     register: (data) => axiosInstance.post('/auth/register', data),
     login: (data) => axiosInstance.post('/auth/login', data),
+    guest: () => axiosInstance.post('/auth/guest'),
     logout: () => axiosInstance.post('/auth/logout'),
     getMe: () => axiosInstance.get('/auth/me'),
     forgotPassword: (email) => axiosInstance.post('/auth/forgot-password', { email }),
     resetPassword: (token, password) => axiosInstance.post(`/auth/reset-password/${token}`, { password }),
-    verifyEmail: (token) => axiosInstance.get(`/auth/verify/${token}`),
+    verifyCode: (email, code) => axiosInstance.post('/auth/verify-email', { email, code }),
+    resendCode: (email) => axiosInstance.post('/auth/resend-code', { email }),
   },
 
   // ── Company / Stocks ─────────────────────────────────────────
@@ -143,6 +157,11 @@ const api = {
   screener: {
     get: (params) => axiosInstance.get('/screener', { params }),
     getSectors: () => axiosInstance.get('/screener/sectors'),
+  },
+
+  // ── AI ───────────────────────────────────────────────────────
+  ai: {
+    chat: (messages) => axiosInstance.post('/ai/chat', { messages }, { timeout: 60000 }),
   },
 
   // ── MUTUAL FUNDS ─────────────────────────────────────────────────────

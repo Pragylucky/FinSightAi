@@ -1,80 +1,84 @@
 // utils/sendEmail.js
-// Sends transactional emails via Nodemailer
-// Uses Gmail SMTP with App Password (not your regular Gmail password)
-//
-// Setup:
-// 1. Go to Google Account → Security → 2-Step Verification (enable if not done)
-// 2. Then go to App Passwords → Select "Mail" → Generate
-// 3. Copy that 16-char password → put in EMAIL_PASS in .env
+// Transactional email. Two transports, picked by env:
+//   1. RESEND_API_KEY set  -> Resend HTTPS API (works on hosts that block SMTP ports)
+//   2. otherwise           -> SMTP via nodemailer (EMAIL_HOST / EMAIL_PORT / EMAIL_USER / EMAIL_PASS)
+// Every send has a hard timeout so a blocked SMTP port can never hang a request.
 
+const axios = require('axios');
 const nodemailer = require('nodemailer');
 
-// Create reusable transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: false, // true for port 465, false for 587
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+const TIMEOUT_MS = 10_000;
+
+const escapeHtml = (s = '') => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let transporter;
+const getTransporter = () => {
+  if (!transporter) {
+    const port = Number(process.env.EMAIL_PORT) || 587;
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port,
+      secure: port === 465, // implicit TLS on 465, STARTTLS otherwise
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      connectionTimeout: TIMEOUT_MS,
+      greetingTimeout: TIMEOUT_MS,
+      socketTimeout: TIMEOUT_MS,
+    });
+  }
+  return transporter;
 };
 
-// Generic send function
-const sendEmail = async ({ to, subject, html }) => {
-  const transporter = createTransporter();
+const isConfigured = () =>
+  Boolean(process.env.RESEND_API_KEY) ||
+  Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS);
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to,
-    subject,
-    html,
-  });
+const sendEmail = async ({ to, subject, html, text }) => {
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+
+  if (process.env.RESEND_API_KEY) {
+    await axios.post(
+      'https://api.resend.com/emails',
+      { from, to: [to], subject, html, text },
+      { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, timeout: TIMEOUT_MS }
+    );
+    return;
+  }
+
+  await getTransporter().sendMail({ from, to, subject, html, text });
 };
 
-// ── Email templates ───────────────────────────────────────────
+// ── Templates ────────────────────────────────────────────────
 
-const sendVerificationEmail = async (email, name, token) => {
-  const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${token}`;
+const shell = (title, body) => `
+  <div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0D0C0B; color: #F6F1EA; padding: 32px; border-radius: 12px;">
+    <h1 style="color: #F5B544; font-size: 22px; margin: 0 0 8px;">FinSight AI</h1>
+    <h2 style="font-size: 18px; margin: 0 0 16px;">${title}</h2>
+    ${body}
+  </div>`;
 
+const sendVerificationCode = async (email, name, code) => {
   await sendEmail({
     to: email,
-    subject: 'Verify your FinSight AI account',
-    html: `
-      <div style="font-family: Inter, sans-serif; max-width: 560px; margin: 0 auto; background: #0B0F1A; color: #F0F4FF; padding: 32px; border-radius: 12px;">
-        <h1 style="color: #00D4FF; font-size: 24px; margin-bottom: 8px;">FinSight AI</h1>
-        <h2 style="color: #F0F4FF; font-size: 20px; margin-bottom: 16px;">Verify your email</h2>
-        <p style="color: #8899AA; line-height: 1.6;">Hi ${name},</p>
-        <p style="color: #8899AA; line-height: 1.6;">Thanks for signing up! Click the button below to verify your email address and activate your account.</p>
-        <a href="${verifyUrl}" style="display: inline-block; background: #00D4FF; color: #0B0F1A; font-weight: 700; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 20px 0;">
-          Verify Email Address
-        </a>
-        <p style="color: #4A5568; font-size: 12px; margin-top: 24px;">This link expires in 24 hours. If you didn't create an account, ignore this email.</p>
-      </div>
-    `,
+    subject: `${code} is your FinSight AI verification code`,
+    text: `Hi ${name}, your FinSight AI verification code is ${code}. It expires in 15 minutes. If you didn't sign up, ignore this email.`,
+    html: shell('Verify your email', `
+      <p style="color: #A89F94; line-height: 1.6;">Hi ${escapeHtml(name)}, enter this code to activate your account:</p>
+      <p style="font-family: 'Courier New', monospace; font-size: 34px; letter-spacing: 10px; font-weight: 700; color: #F5B544; background: #161412; border: 1px solid #2C2824; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">${code}</p>
+      <p style="color: #6B645B; font-size: 12px;">The code expires in 15 minutes. If you didn't create an account, you can ignore this email.</p>`),
   });
 };
 
 const sendPasswordResetEmail = async (email, name, token) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password/${token}`;
-
   await sendEmail({
     to: email,
     subject: 'Reset your FinSight AI password',
-    html: `
-      <div style="font-family: Inter, sans-serif; max-width: 560px; margin: 0 auto; background: #0B0F1A; color: #F0F4FF; padding: 32px; border-radius: 12px;">
-        <h1 style="color: #00D4FF; font-size: 24px; margin-bottom: 8px;">FinSight AI</h1>
-        <h2 style="color: #F0F4FF; font-size: 20px; margin-bottom: 16px;">Reset your password</h2>
-        <p style="color: #8899AA; line-height: 1.6;">Hi ${name}, we received a request to reset your password.</p>
-        <a href="${resetUrl}" style="display: inline-block; background: #00D4FF; color: #0B0F1A; font-weight: 700; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 20px 0;">
-          Reset Password
-        </a>
-        <p style="color: #4A5568; font-size: 12px; margin-top: 24px;">This link expires in 1 hour. If you didn't request this, ignore this email and your password won't change.</p>
-      </div>
-    `,
+    text: `Hi ${name}, reset your password here: ${resetUrl} (valid for 1 hour). If you didn't ask for this, ignore this email.`,
+    html: shell('Reset your password', `
+      <p style="color: #A89F94; line-height: 1.6;">Hi ${escapeHtml(name)}, we received a request to reset your password.</p>
+      <a href="${resetUrl}" style="display: inline-block; background: #F5B544; color: #0D0C0B; font-weight: 700; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 20px 0;">Reset password</a>
+      <p style="color: #6B645B; font-size: 12px;">This link expires in 1 hour. If you didn't request it, your password won't change.</p>`),
   });
 };
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail };
+module.exports = { sendVerificationCode, sendPasswordResetEmail, isConfigured };

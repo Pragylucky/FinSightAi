@@ -40,8 +40,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  verificationToken: String,
-  verificationTokenExpiry: Date,
+  // 6-digit email code (only a SHA-256 hash is stored)
+  verificationCodeHash: { type: String, select: false },
+  verificationCodeExpiry: Date,
+  verificationAttempts: { type: Number, default: 0 },
+  verificationLastSent: Date,
 
   // Password reset
   passwordResetToken: String,
@@ -65,6 +68,9 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+
+  // Throwaway demo account created by "Continue as guest"; cleaned up automatically
+  isGuest: { type: Boolean, default: false, index: true },
 
   // Soft delete — instead of actually deleting, we mark as inactive
   isActive: {

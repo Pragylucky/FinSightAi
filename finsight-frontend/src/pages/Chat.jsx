@@ -1,430 +1,236 @@
-// Chat.jsx
-// AI Chat Assistant page
+// Chat.jsx — AI assistant
 
-
-import { useState, useRef, useEffect } from 'react';
-import { Send, Zap, User, Loader2, RefreshCw, Copy, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { useState, useRef, useEffect, useLayoutEffect, Fragment } from 'react';
+import { Send, Zap, User, RefreshCw, Copy, Check } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { chatSuggestions } from '../data/mockData';
+import api from '../services/api';
+import { motion } from 'framer-motion';
+import { EASE } from '../lib/motion';
 
+const WELCOME = "Hi, I'm FinSight AI.\n\nI can help you:\n• Analyse a stock or company\n• Explain terms like PE ratio, EBITDA or ROE\n• Compare funds or stocks\n• Make sense of market news\n\nWhat would you like to know?";
+const now = () => Date.now();
 
-const getMockResponse = (message) => {
-  const msg = message.toLowerCase();
+// ── Safe mini-markdown renderer (no innerHTML) ───────────────────────────────
+function inline(text) {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} className="text-text-primary font-semibold">{part.slice(2, -2)}</strong>;
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={i} className="px-1 py-0.5 rounded bg-bg-tertiary font-mono text-xs text-accent-primary">{part.slice(1, -1)}</code>;
+    return <Fragment key={i}>{part}</Fragment>;
+  });
+}
 
-  if (msg.includes('tcs') || msg.includes('tata consultancy')) {
-    return `**TCS (Tata Consultancy Services) Analysis:**
+const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+const isDivider = (l) => /^\s*\|[\s:|-]+\|\s*$/.test(l);
+const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
 
-TCS is India's largest IT company and a global leader in technology services. Here's a quick breakdown:
+function Markdown({ text }) {
+  const lines = text.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
 
-**Current Status:**
-• Stock Price: ₹3,842 | PE Ratio: 28.4x
-• Market Cap: ₹14 Lakh Crore (India's most valuable company by market cap at times)
-• Revenue Growth: 8.7% YoY | Net Margin: 24%+
+    if (isTableRow(line)) {
+      const rows = [];
+      while (i < lines.length && isTableRow(lines[i])) { if (!isDivider(lines[i])) rows.push(cells(lines[i])); i += 1; }
+      i -= 1;
+      const [head, ...body] = rows;
+      out.push(
+        <div key={i} className="overflow-x-auto my-2">
+          <table className="text-xs w-full">
+            <thead><tr className="border-b border-bg-border">{head.map((c, j) => <th key={j} className="text-left py-1.5 pr-4 text-text-primary font-semibold">{inline(c)}</th>)}</tr></thead>
+            <tbody>{body.map((r, k) => <tr key={k} className="border-b border-bg-border/50 last:border-0">{r.map((c, j) => <td key={j} className="py-1.5 pr-4 text-text-secondary">{inline(c)}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
 
-**Should you invest?**
-TCS is often considered a "blue-chip" stock — stable, dividend-paying, and unlikely to disappear. For long-term investors (5+ years), TCS makes sense as a core holding.
+    const bullet = line.match(/^\s*[•\-*]\s+(.*)/);
+    const numbered = line.match(/^\s*(\d+)[.)]\s+(.*)/);
+    const heading = line.match(/^#{1,4}\s+(.*)/);
 
-**Key risks to watch:**
-• US tech spending slowdown could reduce deal wins
-• High PE of 28x means limited near-term upside
-• Rupee appreciation hurts export revenue
-
-**Bottom line:** TCS is a quality business at a fair (not cheap) price. Suitable for long-term SIP-style investment rather than short-term trading.
-
-⚠️ *This is educational analysis only — not financial advice. Always do your own research.*`;
+    if (bullet) out.push(<div key={i} className="flex gap-2 text-sm text-text-secondary leading-relaxed"><span className="text-accent-primary">•</span><span>{inline(bullet[1])}</span></div>);
+    else if (numbered) out.push(<div key={i} className="flex gap-2 text-sm text-text-secondary leading-relaxed"><span className="font-mono text-accent-primary">{numbered[1]}.</span><span>{inline(numbered[2])}</span></div>);
+    else if (heading) out.push(<p key={i} className="text-sm font-semibold text-text-primary pt-1">{inline(heading[1])}</p>);
+    else if (!line.trim()) out.push(<div key={i} className="h-2" />);
+    else out.push(<p key={i} className="text-sm leading-relaxed text-text-secondary">{inline(line)}</p>);
   }
+  return <div className="space-y-1">{out}</div>;
+}
 
-  if (msg.includes('ebitda')) {
-    return `**What is EBITDA? (Simply explained)**
-
-EBITDA = **E**arnings **B**efore **I**nterest, **T**axes, **D**epreciation & **A**mortization
-
-Think of it as the money a business makes from its actual operations, before:
-• Paying interest on loans (bank's cut)
-• Paying taxes (government's cut)
-• Accounting for equipment aging (depreciation)
-
-**Why it matters:**
-EBITDA helps compare companies fairly regardless of how they're financed or taxed. It shows core business profitability.
-
-**Simple example:**
-TCS Revenue: ₹60,000 Cr
-→ Minus staff costs, rent, etc.
-→ **EBITDA: ₹15,000 Cr** ← "operational profit"
-→ Minus depreciation on servers/equipment: ₹500 Cr
-→ EBIT: ₹14,500 Cr
-→ Minus loan interest: ₹200 Cr
-→ Minus taxes: ₹3,500 Cr
-→ **Net Profit: ₹10,800 Cr** ← what shareholders actually get
-
-**EBITDA Margin** = EBITDA / Revenue × 100 → Higher is better!`;
-  }
-
-  if (msg.includes('pe') || msg.includes('p/e') || msg.includes('pe ratio')) {
-    return `**PE Ratio Explained Simply**
-
-PE Ratio = Price Per Share ÷ Earnings Per Share
-
-It tells you: **"How many rupees are you paying for every ₹1 of profit?"**
-
-**Example with TCS:**
-• Price: ₹3,842
-• EPS (Earnings Per Share): ₹135
-• PE = 3842 ÷ 135 = **28.4x**
-
-This means: you pay ₹28.4 for every ₹1 TCS earns.
-
-**How to use PE:**
-| PE Range | What it suggests |
-|----------|-----------------|
-| < 15 | Potentially undervalued (or slow growth) |
-| 15-25 | Fair value for most companies |
-| 25-40 | Growth premium — market expects high growth |
-| 40+ | Expensive — needs to justify with strong growth |
-
-**Important:** PE only makes sense when comparing companies in the SAME sector. A bank at PE 12 isn't "cheaper" than an IT company at PE 25 — they're different businesses.
-
-**High PE ≠ Bad. Low PE ≠ Good.** Context always matters!`;
-  }
-
-  if (msg.includes('compare') && (msg.includes('infosys') || msg.includes('infy') || msg.includes('wipro'))) {
-    return `**Infosys vs Wipro — Head to Head**
-
-| Metric | Infosys (INFY) | Wipro |
-|--------|---------------|-------|
-| Price | ₹1,456 | ₹456 |
-| Market Cap | ₹6 Lakh Cr | ₹2.4 Lakh Cr |
-| PE Ratio | 23.6x | 20.4x |
-| Revenue Growth | 4.2% | 3.2% |
-| Net Margin | 17% | 16% |
-| ROE | 32.4% | 17.8% |
-| Dividend Yield | 2.34% | 0.56% |
-
-**Key Differences:**
-
-🟢 **Infosys Strengths:**
-• Higher ROE (more efficient with shareholder money)
-• Better dividend yield for income investors
-• Stronger AI/Cloud transformation narrative
-
-🟡 **Wipro Strengths:**
-• Lower PE — slightly cheaper valuation
-• Stronger M&A strategy (40+ acquisitions)
-• Better growth in Europe segment
-
-**My take:**
-If forced to choose between the two, Infosys generally wins on quality metrics — higher ROE, better margins, more consistent guidance. But Wipro's lower valuation could offer better risk-reward if execution improves under new CEO.
-
-Neither is growing as fast as TCS — keep that in mind!`;
-  }
-
-  if (msg.includes('mutual fund') || msg.includes('sip') || msg.includes('mf')) {
-    return `**Mutual Funds & SIP — Beginner Guide**
-
-**What is a Mutual Fund?**
-A pool of money collected from many investors, managed by professional fund managers who invest it in stocks/bonds on your behalf.
-
-**What is SIP?**
-Systematic Investment Plan — investing a fixed amount (e.g., ₹5,000) every month automatically. Like an EMI, but for wealth creation.
-
-**Types of Mutual Funds (simplified):**
-
-📊 **By asset class:**
-• Equity Funds → Invest in stocks (high risk, high return)
-• Debt Funds → Bonds, FDs (low risk, stable return)
-• Hybrid Funds → Mix of both
-
-📊 **By market cap:**
-• Large Cap → Top 100 companies (TCS, HDFC) — stable
-• Mid Cap → Companies 101-250 — more growth potential
-• Small Cap → Beyond 250 — high risk, high reward
-
-**For a 22-year-old starting out:**
-1. Start with a Nifty 50 Index Fund (low cost, diversified)
-2. Add a Flexi Cap Fund (Parag Parikh is popular)
-3. Keep investing every month regardless of market ups/downs
-
-**Rule of thumb:** The younger you are, the more equity you can hold. SIP for 15+ years and compounding does the magic.`;
-  }
-
-  // Default response for anything else
-  return `I understand you're asking about: **"${message}"**
-
-I'm FinSight AI, your financial research assistant. I can help you with:
-
-📊 **Company Analysis** — Ask about any stock: "What is TCS's PE ratio?" or "Analyze HDFC Bank"
-
-💡 **Financial Concepts** — "Explain EBITDA", "What is PE ratio?", "How does SIP work?"
-
-📈 **Stock Comparison** — "Compare Infosys and Wipro" or "TCS vs Infosys"
-
-📰 **Market Events** — "Why did Zomato fall today?" or "What happened to Reliance?"
-
-🏦 **Mutual Funds** — "Best mutual funds for beginners" or "What is expense ratio?"
-
-Try one of the example questions below or type your specific question!
-
-⚠️ *Remember: I provide educational information only. Always consult a SEBI-registered advisor before investing real money.*`;
-};
-
-// Message bubble component
 function Message({ msg }) {
   const isAI = msg.role === 'assistant';
   const [copied, setCopied] = useState(false);
 
-  const copyText = () => {
-    navigator.clipboard.writeText(msg.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Simple markdown-ish renderer for bold, bullet points
-  const renderContent = (text) => {
-    return text.split('\n').map((line, i) => {
-      // Bold text
-      line = line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-text-primary font-semibold">$1</strong>');
-      // Bullet points
-      if (line.startsWith('•') || line.startsWith('-')) {
-        return (
-          <li key={i}
-            className="ml-4 text-text-secondary text-sm leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: line.replace(/^[•-]\s*/, '') }}
-          />
-        );
-      }
-      // Empty lines
-      if (!line.trim()) return <br key={i} />;
-      // Normal lines
-      return (
-        <p key={i}
-          className="text-sm leading-relaxed text-text-secondary"
-          dangerouslySetInnerHTML={{ __html: line }}
-        />
-      );
-    });
+  const copyText = async () => {
+    try {
+      await navigator.clipboard.writeText(msg.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard blocked */ }
   };
 
   return (
-    <div className={`flex gap-3 ${isAI ? '' : 'flex-row-reverse'}`}>
-      {/* Avatar */}
-      <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center ${
-        isAI ? 'bg-gradient-to-br from-accent-cyan to-accent-purple' : 'bg-bg-tertiary border border-bg-border'
-      }`}>
+    <motion.div
+      className={`flex gap-3 ${isAI ? '' : 'flex-row-reverse'}`}
+      initial={{ opacity: 0, y: 14, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.35, ease: EASE }}
+    >
+      <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center ${isAI ? 'bg-gradient-to-br from-accent-primary to-accent-secondary shadow-lg shadow-accent-primary/20' : 'bg-bg-tertiary border border-bg-border'}`}>
         {isAI ? <Zap size={14} className="text-bg-primary" /> : <User size={14} className="text-text-secondary" />}
       </div>
 
-      {/* Bubble */}
-      <div className={`flex-1 max-w-[80%] ${!isAI ? 'flex flex-col items-end' : ''}`}>
-        <div className={`rounded-2xl px-4 py-3 ${
-          isAI
-            ? 'bg-bg-secondary border border-bg-border rounded-tl-none'
-            : 'bg-accent-cyan/10 border border-accent-cyan/20 rounded-tr-none'
-        }`}>
-          <div className="space-y-1">
-            {renderContent(msg.content)}
-          </div>
+      <div className={`min-w-0 max-w-[85%] sm:max-w-[80%] ${!isAI ? 'flex flex-col items-end' : ''}`}>
+        <div className={`rounded-2xl px-4 py-3 ${isAI ? 'bg-bg-secondary border border-bg-border rounded-tl-none' : 'bg-accent-primary/10 border border-accent-primary/20 rounded-tr-none'}`}>
+          {isAI ? <Markdown text={msg.content} /> : <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap break-words">{msg.content}</p>}
         </div>
 
-        {/* Actions for AI messages */}
-        {isAI && (
-          <div className="flex items-center gap-2 mt-1.5 ml-1">
-            <button onClick={copyText} className="text-text-muted hover:text-text-secondary transition-colors">
-              <Copy size={12} />
+        <div className="flex items-center gap-2 mt-1.5 mx-1 text-xs text-text-muted">
+          <span>{new Date(msg.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+          {isAI && (
+            <button onClick={copyText} aria-label="Copy reply" className="hover:text-text-secondary transition-colors flex items-center gap-1">
+              {copied ? <Check size={12} className="text-accent-green" /> : <Copy size={12} />}
+              {copied && <span className="text-accent-green">Copied</span>}
             </button>
-            {copied && <span className="text-xs text-accent-green">Copied!</span>}
-            <button className="text-text-muted hover:text-accent-green transition-colors">
-              <ThumbsUp size={12} />
-            </button>
-            <button className="text-text-muted hover:text-accent-red transition-colors">
-              <ThumbsDown size={12} />
-            </button>
-          </div>
-        )}
-
-        {/* Timestamp */}
-        <p className="text-xs text-text-muted mt-1 mx-1">
-          {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-        </p>
+          )}
+        </div>
       </div>
-    </div>
+    </motion.div>
+  );
+}
+
+function Typing() {
+  return (
+    <motion.div className="flex gap-3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center shrink-0">
+        <Zap size={14} className="text-bg-primary" />
+      </div>
+      <div className="bg-bg-secondary border border-bg-border rounded-2xl rounded-tl-none px-4 py-3.5 flex items-center gap-1.5" aria-label="FinSight is thinking">
+        {[0, 1, 2].map((d) => (
+          <span key={d} className="w-1.5 h-1.5 rounded-full bg-accent-primary" style={{ animation: `blink-dot 1.2s ${d * 0.15}s infinite` }} />
+        ))}
+      </div>
+    </motion.div>
   );
 }
 
 export default function Chat() {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: "Hey! I'm FinSight AI, your personal financial research assistant.\n\nI can help you:\n• Analyze any stock or company\n• Explain financial concepts (PE ratio, EBITDA, ROE...)\n• Compare funds or stocks\n• Summarize market news\n• Answer any investment question\n\nWhat would you like to know today?",
-    },
-  ]);
+  const [messages, setMessages] = useState(() => [{ role: 'assistant', content: WELCOME, at: now() }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const taRef = useRef(null);
 
-  // Auto-scroll to bottom when new message appears
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, loading]);
 
-  const sendMessage = async (text = input) => {
-  if (!text.trim() || loading) return;
+  // Auto-grow the textarea up to 120px
+  useLayoutEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [input]);
 
-  const userMsg = {
-    role: 'user',
-    content: text.trim(),
+  const send = async (text = input) => {
+    const content = text.trim();
+    if (!content || loading) return;
+
+    const history = [...messages, { role: 'user', content, at: now() }];
+    setMessages(history);
+    setInput('');
+    setLoading(true);
+
+    try {
+      // The welcome message is UI-only; don't send it to the model as history.
+      const payload = history.slice(1).map(({ role, content: c }) => ({ role, content: c }));
+      const data = await api.ai.chat(payload);
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.message, at: now() }]);
+    } catch (err) {
+      setMessages((prev) => [...prev, { role: 'assistant', content: `I couldn't answer that: ${err.message}`, at: now() }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Include the new user message in conversation history
-  const updatedMessages = [...messages, userMsg];
-
-  setMessages(updatedMessages);
-  setInput('');
-  setLoading(true);
-
-  try {
-    const token = localStorage.getItem('accessToken');
-
-    const response = await fetch('http://localhost:5000/api/ai/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        messages: updatedMessages.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'AI request failed');
-    }
-
-    setMessages(prev => [
-      ...prev,
-      {
-        role: 'assistant',
-        content: data.message,
-      },
-    ]);
-
-  } catch (error) {
-    console.error('AI Chat Error:', error);
-
-    setMessages(prev => [
-      ...prev,
-      {
-        role: 'assistant',
-        content:
-          'Sorry, I could not process your request right now. Please try again.',
-      },
-    ]);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const handleKeyDown = (e) => {
+  const onKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      send();
     }
   };
 
-  const clearChat = () => {
-    setMessages([{
-      role: 'assistant',
-      content: "Chat cleared! Start a new conversation. What would you like to explore?",
-    }]);
-  };
+  const reset = () => setMessages([{ role: 'assistant', content: WELCOME, at: now() }]);
+  const canSend = input.trim() && !loading;
 
- return (
-  <div className="flex flex-col w-full max-w-full min-w-0 h-[calc(100vh-120px)] page-enter overflow-hidden">
-      {/* ── HEADER ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
+  return (
+    <div className="flex flex-col w-full min-w-0 h-[calc(100vh-150px)] min-h-[420px]">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div>
           <h1 className="font-display font-bold text-xl text-text-primary">AI Chat Assistant</h1>
-          <p className="text-text-secondary text-sm">Ask anything about stocks, markets, or financial concepts</p>
+          <p className="text-text-secondary text-sm">Ask about stocks, markets or financial concepts</p>
         </div>
-        <button
-          onClick={clearChat}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary border border-bg-border rounded-lg hover:bg-bg-secondary transition-all"
-        >
+        <button onClick={reset} className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary border border-bg-border rounded-lg hover:bg-bg-secondary transition-colors">
           <RefreshCw size={14} />
           New chat
         </button>
       </div>
 
-      {/* ── CHAT AREA ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto space-y-5 pr-2 pb-4 min-h-0">
-        {messages.map((msg, i) => (
-          <Message key={i} msg={msg} />
-        ))}
-
-        {/* Loading indicator */}
-        {loading && (
-          <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-cyan to-accent-purple flex items-center justify-center shrink-0">
-              <Zap size={14} className="text-bg-primary" />
-            </div>
-            <div className="bg-bg-secondary border border-bg-border rounded-2xl rounded-tl-none px-4 py-3">
-              <div className="flex items-center gap-2 text-text-muted">
-                <Loader2 size={14} className="animate-spin" />
-                <span className="text-sm">FinSight is analyzing...</span>
-              </div>
-            </div>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto space-y-5 pr-2 pb-4 min-h-0" aria-live="polite">
+        {messages.map((m, i) => <Message key={i} msg={m} />)}
+        <AnimatePresence>{loading && <Typing key="typing" />}</AnimatePresence>
         <div ref={bottomRef} />
       </div>
 
-      {/* ── SUGGESTIONS ───────────────────────────────────────────────── */}
-      {messages.length <= 1 && (
-        <div className="mb-4">
-          <p className="text-text-muted text-xs mb-2 font-medium uppercase tracking-wider">Try asking:</p>
-          <div className="flex flex-wrap gap-2">
-            {chatSuggestions.slice(0, 6).map((s, i) => (
-              <button
-                key={i}
-                onClick={() => sendMessage(s)}
-                className="px-3 py-1.5 bg-bg-secondary border border-bg-border rounded-full text-xs text-text-secondary hover:text-text-primary hover:border-accent-cyan/30 hover:bg-bg-tertiary transition-all"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {messages.length <= 1 && (
+          <motion.div className="mb-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}>
+            <p className="text-text-muted text-xs mb-2 font-medium uppercase tracking-wider">Try asking</p>
+            <div className="flex flex-wrap gap-2">
+              {chatSuggestions.slice(0, 6).map((s, i) => (
+                <motion.button
+                  key={s}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 + i * 0.05 }}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => send(s)}
+                  className="px-3 py-1.5 bg-bg-secondary border border-bg-border rounded-full text-xs text-text-secondary hover:text-text-primary hover:border-accent-primary/40 transition-colors"
+                >
+                  {s}
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* ── INPUT ─────────────────────────────────────────────────────── */}
-      <div className="flex gap-3 bg-bg-secondary border border-bg-border rounded-xl p-3">
+      <div className="flex items-end gap-3 bg-bg-secondary border border-bg-border rounded-xl p-3 focus-within:border-accent-primary/50 focus-within:shadow-[0_0_0_3px_rgba(245,181,68,0.08)] transition-all">
         <textarea
+          ref={taRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask about any stock, financial concept, or market trend... (Enter to send)"
+          onKeyDown={onKeyDown}
+          aria-label="Message"
+          placeholder="Ask about a stock, a concept, a trend…  (Enter to send, Shift+Enter for a new line)"
           rows={1}
-          className="flex-1 bg-transparent text-text-primary text-sm resize-none outline-none placeholder:text-text-muted"
-          style={{ maxHeight: '120px' }}
+          className="flex-1 bg-transparent text-text-primary text-sm resize-none outline-none placeholder:text-text-muted py-2"
         />
-        <button
-          onClick={() => sendMessage()}
-          disabled={!input.trim() || loading}
-          className={`p-2.5 rounded-lg transition-all shrink-0 ${
-            input.trim() && !loading
-              ? 'bg-accent-cyan text-bg-primary hover:bg-accent-cyan/90'
-              : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-          }`}
+        <motion.button
+          onClick={() => send()}
+          disabled={!canSend}
+          aria-label="Send"
+          whileTap={canSend ? { scale: 0.9 } : undefined}
+          className={`p-2.5 rounded-lg shrink-0 transition-colors ${canSend ? 'bg-accent-primary text-bg-primary hover:bg-accent-primary/90' : 'bg-bg-tertiary text-text-muted cursor-not-allowed'}`}
         >
           <Send size={16} />
-        </button>
+        </motion.button>
       </div>
-      <p className="text-center text-xs text-text-muted mt-2">
-        FinSight AI · Educational purposes only · Not financial advice
-      </p>
+      <p className="text-center text-xs text-text-muted mt-2">Educational only · Not financial advice</p>
     </div>
   );
 }

@@ -1,54 +1,28 @@
-// Dashboard.jsx
-// Main dashboard page — first thing you see after logging in
-// Shows: portfolio summary, market indices, gainers/losers, news, watchlist
+// Dashboard.jsx — first screen after login.
+// Portfolio, watchlist and news come from the API. The backend has no index /
+// top-movers feed yet, so those two cards use sample data and say so.
 
 import { useNavigate } from 'react-router-dom';
-import {
-  TrendingUp, TrendingDown, BriefcaseBusiness, Star,
-  Newspaper, ArrowRight, DollarSign, BarChart3, Bell,
-} from 'lucide-react';
-import {
-  Card, StatCard, SectionHeader, StockRow, Badge, ChangeBadge,
-} from '../components/ui';
-import {
-  dashboardStats, topGainers, topLosers, newsItems, watchlistItems,
-  generatePortfolioHistory, portfolioAllocation,
-} from '../data/mockData';
-import { PortfolioLineChart, PortfolioPieChart } from '../components/charts';
+import { TrendingUp, TrendingDown, BriefcaseBusiness, Star, ArrowRight, Sparkles, Layers } from 'lucide-react';
+import { Card, StatCard, SectionHeader, StockRow, Badge, EmptyState, ErrorNotice, LoadingSkeleton } from '../components/ui';
+import { topGainers, topLosers, dashboardStats } from '../data/mockData';
+import { PortfolioPieChart } from '../components/charts';
+import { Stagger, Item } from '../components/motion';
+import { useAuth } from '../context/AuthContext';
+import { greeting } from '../lib/format';
+import useApi from '../lib/useApi';
+import api from '../services/api';
+import { CHART_PALETTE } from '../lib/theme';
 
-// Mini news card
-function MiniNewsCard({ item }) {
-  const sentimentVariant = {
-    bullish: 'green',
-    bearish: 'red',
-    neutral: 'yellow',
-  }[item.sentiment] || 'default';
+const fetchPortfolio = () => api.portfolio.get();
+const fetchWatchlist = () => api.watchlist.get();
+const fetchNews = () => api.news.get();
 
-  return (
-    <div className="py-3 border-b border-bg-border last:border-0 hover:bg-bg-tertiary/50 -mx-4 px-4 cursor-pointer transition-all rounded-lg group">
-      <div className="flex items-start gap-2 mb-1.5">
-        <Badge variant={sentimentVariant} className="shrink-0 mt-0.5 capitalize">
-          {item.sentiment}
-        </Badge>
-        <Badge variant="default" className="shrink-0 mt-0.5">{item.category}</Badge>
-      </div>
-      <p className="text-sm font-medium text-text-primary leading-snug mb-1 group-hover:text-accent-cyan transition-colors">
-        {item.title}
-      </p>
-      <div className="flex items-center gap-3 text-xs text-text-muted">
-        <span>{item.source}</span>
-        <span>·</span>
-        <span>{item.time}</span>
-      </div>
-    </div>
-  );
-}
 
-// Market index mini card
 function IndexCard({ name, value, change }) {
   const isUp = change >= 0;
   return (
-    <div className="bg-bg-tertiary border border-bg-border rounded-lg p-3 flex items-center justify-between">
+    <div className="bg-bg-tertiary/80 border border-bg-border rounded-lg p-3 flex items-center justify-between">
       <div>
         <p className="text-xs text-text-muted mb-0.5">{name}</p>
         <p className="font-mono font-bold text-sm text-text-primary">{value.toLocaleString('en-IN')}</p>
@@ -61,219 +35,166 @@ function IndexCard({ name, value, change }) {
   );
 }
 
+function SampleTag() {
+  return <Badge variant="default">Sample data</Badge>;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
-  const portfolioHistory = generatePortfolioHistory();
-  const { portfolioValue, portfolioChange, totalPL, totalPLPercent, nifty50, sensex, gold, dollarInr } = dashboardStats;
-  const hour = new Date().getHours();
-      let greeting = "Good morning";
+  const { user } = useAuth();
+  const portfolio = useApi(fetchPortfolio, { allow404: true });
+  const watchlist = useApi(fetchWatchlist, { allow404: true });
+  const news = useApi(fetchNews);
 
-      if (hour >= 12 && hour < 17) {
-        greeting = "Good afternoon";
-      } else if (hour >= 17 && hour < 21) {
-        greeting = "Good evening";
-      } else if (hour >= 21 || hour < 5) {
-        greeting = "Good night";
-      }
+  const summary = portfolio.data?.portfolio?.summary;
+  const holdings = portfolio.data?.portfolio?.holdings || [];
+  const stocks = watchlist.data?.watchlist?.stocks || [];
+  const headlines = (news.data?.news || []).slice(0, 4);
+  const { nifty50, sensex, gold, dollarInr } = dashboardStats;
 
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      const userName = user.name || "Investor";
+  // Sector allocation from real holdings by current value
+  const bySector = {};
+  holdings.forEach((h) => {
+    const key = h.sector || 'Other';
+    bySector[key] = (bySector[key] || 0) + (h.currentValue ?? h.quantity * h.averagePrice);
+  });
+  const total = Object.values(bySector).reduce((a, b) => a + b, 0);
+  const allocation = Object.entries(bySector)
+    .map(([name, v], i) => ({ name, value: Math.round((v / total) * 100), color: CHART_PALETTE[i % CHART_PALETTE.length] }))
+    .sort((a, b) => b.value - a.value);
+
+  const firstName = (user?.name || 'there').split(' ')[0];
+
   return (
-    <div className="space-y-6 page-enter">
-      {/* ── GREETING ──────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="font-display font-bold text-2xl text-text-primary">
-            {greeting}, {userName} 👋
-          </h1>
-          <p className="text-text-secondary text-sm mt-1">
-            Here&apos;s what&apos;s happening in the markets today.
-          </p>
-        </div>
-        <button className="relative p-2.5 bg-bg-secondary border border-bg-border rounded-lg hover:bg-bg-tertiary transition-all">
-          <Bell size={18} className="text-text-secondary" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-accent-red rounded-full" />
-        </button>
-      </div>
+    <Stagger className="space-y-6" stagger={0.07}>
+      <Item>
+        <h1 className="font-display font-bold text-2xl sm:text-3xl text-text-primary">
+          {greeting()}, <span className="gradient-text">{firstName}</span>
+        </h1>
+        <p className="text-text-secondary text-sm mt-1">Here&apos;s where your money and the market stand today.</p>
+      </Item>
 
-      {/* ── MARKET INDICES ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <Item className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <IndexCard name="Nifty 50" value={nifty50.value} change={nifty50.change} />
         <IndexCard name="SENSEX" value={sensex.value} change={sensex.change} />
         <IndexCard name="Gold (10g)" value={gold.value} change={gold.change} />
         <IndexCard name="USD/INR" value={dollarInr.value} change={dollarInr.change} />
-      </div>
+        <p className="col-span-full -mt-1 text-[11px] text-text-muted">Index levels are sample data; live index feeds aren&apos;t connected yet.</p>
+      </Item>
 
-      {/* ── PORTFOLIO STATS ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Portfolio Value"
-          value={portfolioValue}
-          change={portfolioChange}
-          icon={BriefcaseBusiness}
-          iconColor="text-accent-cyan"
-          prefix="₹"
-          className="col-span-1"
-        />
+      <Item className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Portfolio value" value={Math.round(summary?.totalCurrent || 0)} prefix="₹" icon={BriefcaseBusiness} iconColor="text-accent-primary" />
         <StatCard
           label="Total P&L"
-          value={totalPL}
-          change={totalPLPercent}
+          value={Math.round(summary?.totalPL || 0)}
+          change={summary ? summary.totalPLPercent : undefined}
+          prefix={summary?.totalPL < 0 ? '−₹' : '+₹'}
           icon={TrendingUp}
-          iconColor="text-accent-green"
-          prefix="+₹"
+          iconColor={summary?.totalPL < 0 ? 'text-accent-red' : 'text-accent-green'}
         />
-        <StatCard
-          label="Watchlist Items"
-          value={watchlistItems.length}
-          icon={Star}
-          iconColor="text-accent-yellow"
-        />
-        <StatCard
-          label="Active Alerts"
-          value={2}
-          icon={Bell}
-          iconColor="text-accent-purple"
-        />
-      </div>
+        <StatCard label="Holdings" value={holdings.length} icon={Layers} iconColor="text-accent-secondary" />
+        <StatCard label="Watchlist" value={stocks.length} icon={Star} iconColor="text-accent-warn" />
+      </Item>
 
-      {/* ── MAIN CONTENT GRID ─────────────────────────────────────────── */}
+      {portfolio.error && <ErrorNotice message={`Couldn't load your portfolio: ${portfolio.error}`} onRetry={portfolio.reload} />}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        {/* Portfolio Chart — takes 2/3 of the row */}
-        <div className="lg:col-span-2 space-y-5">
+        <Item className="lg:col-span-2 space-y-5">
           <Card>
             <SectionHeader
-              title="Portfolio Performance"
-              subtitle="Last 6 months"
-              action={
-                <button
-                  onClick={() => navigate('/portfolio')}
-                  className="flex items-center gap-1 text-xs text-accent-cyan hover:underline"
-                >
-                  View details <ArrowRight size={12} />
-                </button>
-              }
+              title="Top movers"
+              subtitle="Today"
+              action={<SampleTag />}
             />
-            <PortfolioLineChart data={portfolioHistory} />
-          </Card>
-
-          {/* Gainers & Losers */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Card>
-              <SectionHeader
-                title="Top Gainers"
-                subtitle="Today"
-                action={<Badge variant="green">NSE/BSE</Badge>}
-              />
-              <div className="space-y-0.5">
-                {topGainers.map((s) => (
-                  <StockRow
-                    key={s.symbol}
-                    {...s}
-                    extra={s.volume}
-                    onClick={() => navigate(`/company/${s.symbol}`)}
-                  />
-                ))}
-              </div>
-            </Card>
-
-            <Card>
-              <SectionHeader
-                title="Top Losers"
-                subtitle="Today"
-                action={<Badge variant="red">NSE/BSE</Badge>}
-              />
-              <div className="space-y-0.5">
-                {topLosers.map((s) => (
-                  <StockRow
-                    key={s.symbol}
-                    {...s}
-                    extra={s.volume}
-                    onClick={() => navigate(`/company/${s.symbol}`)}
-                  />
-                ))}
-              </div>
-            </Card>
-          </div>
-        </div>
-
-        {/* Right sidebar — Watchlist + News */}
-        <div className="space-y-5">
-          {/* Sector Allocation */}
-          <Card>
-            <SectionHeader title="Sector Allocation" />
-            <PortfolioPieChart data={portfolioAllocation} />
-          </Card>
-
-          {/* Watchlist */}
-          <Card>
-            <SectionHeader
-              title="Watchlist"
-              action={
-                <button
-                  onClick={() => navigate('/watchlist')}
-                  className="text-xs text-accent-cyan hover:underline"
-                >
-                  View all
-                </button>
-              }
-            />
-            <div className="space-y-0.5">
-              {watchlistItems.slice(0, 4).map((s) => (
-                <StockRow
-                  key={s.symbol}
-                  {...s}
-                  onClick={() => navigate(`/company/${s.symbol}`)}
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {[['Gainers', topGainers], ['Losers', topLosers]].map(([label, list]) => (
+                <div key={label}>
+                  <p className="text-xs uppercase tracking-wider text-text-muted mb-1 px-3">{label}</p>
+                  <div className="space-y-0.5">
+                    {list.map((s) => (
+                      <StockRow key={s.symbol} {...s} extra={s.volume} onClick={() => navigate(`/company/${s.symbol}`)} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </Card>
-        </div>
+
+          <Card>
+            <SectionHeader
+              title="Latest news"
+              action={
+                <button onClick={() => navigate('/news')} className="flex items-center gap-1 text-xs text-accent-primary hover:underline">
+                  All news <ArrowRight size={12} />
+                </button>
+              }
+            />
+            {news.loading ? <LoadingSkeleton lines={4} height="h-5" /> : news.error ? (
+              <ErrorNotice message={news.error} onRetry={news.reload} />
+            ) : headlines.length === 0 ? (
+              <p className="text-sm text-text-muted py-4">No headlines right now.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                {headlines.map((item, i) => (
+                  <a
+                    key={item.id || item.url || i}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block py-3 border-b border-bg-border last:border-0 group"
+                  >
+                    <p className="text-sm font-medium text-text-primary leading-snug mb-1 group-hover:text-accent-primary transition-colors line-clamp-2">{item.title}</p>
+                    <p className="text-xs text-text-muted">{item.source}{item.time ? ` · ${item.time}` : ''}</p>
+                  </a>
+                ))}
+              </div>
+            )}
+          </Card>
+        </Item>
+
+        <Item className="space-y-5">
+          <Card>
+            <SectionHeader title="Sector allocation" />
+            {portfolio.loading ? <LoadingSkeleton lines={4} height="h-6" /> : allocation.length ? (
+              <PortfolioPieChart data={allocation} />
+            ) : (
+              <EmptyState icon={BriefcaseBusiness} title="No holdings yet" description="Add a holding to see how your money is split." action={<button onClick={() => navigate('/portfolio')} className="btn-secondary text-sm py-2">Add holding</button>} />
+            )}
+          </Card>
+
+          <Card>
+            <SectionHeader
+              title="Watchlist"
+              action={<button onClick={() => navigate('/watchlist')} className="text-xs text-accent-primary hover:underline">View all</button>}
+            />
+            {watchlist.loading ? <LoadingSkeleton lines={4} height="h-8" /> : stocks.length ? (
+              <div className="space-y-0.5">
+                {stocks.slice(0, 5).map((s) => (
+                  <StockRow key={s.symbol} symbol={s.symbol} name={s.name} price={s.currentPrice} change={s.change} onClick={() => navigate(`/company/${s.symbol}`)} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-text-muted py-4">Nothing on your watchlist yet.</p>
+            )}
+          </Card>
+        </Item>
       </div>
 
-      {/* ── LATEST NEWS ───────────────────────────────────────────────── */}
-      <Card>
-        <SectionHeader
-          title="Latest Financial News"
-          subtitle="AI-curated • Sentiment analyzed"
-          action={
-            <button
-              onClick={() => navigate('/news')}
-              className="flex items-center gap-1 text-xs text-accent-cyan hover:underline"
-            >
-              View all news <ArrowRight size={12} />
+      <Item>
+        <Card className="bg-gradient-to-r from-accent-primary/5 to-accent-secondary/10 border-accent-primary/20">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display font-semibold text-text-primary text-lg">Ask the AI anything</h3>
+              <p className="text-text-secondary text-sm mt-1">&quot;Should I invest in TCS?&quot; · &quot;What is EBITDA?&quot; · &quot;Compare Infosys and Wipro&quot;</p>
+            </div>
+            <button onClick={() => navigate('/chat')} className="btn-primary shrink-0 flex items-center gap-2">
+              <Sparkles size={16} />
+              Open AI chat
             </button>
-          }
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-          {newsItems.slice(0, 4).map((item) => (
-            <MiniNewsCard key={item.id} item={item} />
-          ))}
-        </div>
-      </Card>
-
-      {/* ── AI QUICK ACTIONS ──────────────────────────────────────────── */}
-      <Card className="bg-gradient-to-r from-accent-cyan/5 to-accent-purple/5 border-accent-cyan/20">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="font-display font-semibold text-text-primary text-lg">
-              Ask the AI anything
-            </h3>
-            <p className="text-text-secondary text-sm mt-1">
-              &quot;Should I invest in TCS?&quot; · &quot;What is EBITDA?&quot; · &quot;Compare Infosys and Wipro&quot;
-            </p>
           </div>
-          <button
-            onClick={() => navigate('/chat')}
-            className="btn-primary shrink-0 flex items-center gap-2"
-          >
-            <BarChart3 size={16} />
-            Open AI Chat
-          </button>
-        </div>
-      </Card>
-      
-    </div>
+        </Card>
+      </Item>
+    </Stagger>
   );
 }
+

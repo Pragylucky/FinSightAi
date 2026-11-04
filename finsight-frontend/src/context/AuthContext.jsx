@@ -1,9 +1,5 @@
-// ================================================================
-// src/context/AuthContext.jsx  ← ADD THIS TO YOUR FRONTEND
-// ================================================================
-// Global authentication state — wraps the whole app
-// Any component can call useAuth() to get user info / login / logout
-// ================================================================
+// Global authentication state — wraps the whole app.
+// Any component can call useAuth() to get user info / login / logout.
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
@@ -33,37 +29,48 @@ export function AuthProvider({ children }) {
     initAuth();
   }, []);
 
-  const login = async (email, password) => {
-    const data = await api.auth.login({ email, password });
+  // Shared by every flow that ends with a signed-in user
+  const startSession = (data) => {
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
     return data;
   };
 
-  const register = async (name, email, password) => {
-  const data = await api.auth.register({ name, email, password });
+  const login = async (email, password) => startSession(await api.auth.login({ email, password }));
 
-  // Don't log the user in yet.
-  // They must verify their email first.
-  return data;
-};
+  // One-click throwaway account for demos
+  const guest = async () => startSession(await api.auth.guest());
+
+  // Resolves with the server response. If the server returned a session (verification
+  // switched off) the user is signed in; otherwise they still need to verify their email.
+  const register = async (name, email, password) => {
+    const data = await api.auth.register({ name, email, password });
+    if (data.accessToken) startSession(data);
+    return data;
+  };
+
+  // Confirming the emailed code also signs the user in
+  const verifyCode = async (email, code) => startSession(await api.auth.verifyCode(email, code));
+
+  const resendCode = (email) => api.auth.resendCode(email);
 
   const logout = async () => {
-    try { await api.auth.logout(); } catch {}
+    try { await api.auth.logout(); } catch { /* already logged out server-side */ }
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, guest, register, verifyCode, resendCode, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 // Custom hook — cleaner than using useContext everywhere
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');

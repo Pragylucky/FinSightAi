@@ -31,6 +31,25 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful logins
 });
 
+// ── Verification limiter — code entry / resend ────────────────
+// Per-user attempt caps live in the controller; this is the per-IP backstop.
+const codeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { success: false, message: 'Too many attempts. Please wait a few minutes and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ── Guest limiter — stops someone scripting thousands of throwaway accounts ──
+const guestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  message: { success: false, message: 'Too many guest sessions from this network. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ── AI Chat limiter — prevent API cost abuse ──────────────────
 // 30 messages per hour per user (after auth)
 const chatLimiter = rateLimit({
@@ -44,4 +63,4 @@ const chatLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { globalLimiter, authLimiter, chatLimiter };
+module.exports = { globalLimiter, authLimiter, codeLimiter, guestLimiter, chatLimiter };
