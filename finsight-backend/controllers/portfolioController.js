@@ -2,7 +2,7 @@
 // All portfolio operations: get, add holding, remove holding, update
 
 const Portfolio = require('../models/Portfolio');
-const { getStockQuote } = require('../services/financeService');
+const { getStockQuote, getCompanyProfile } = require('../services/financeService');
 const { AppError } = require('../middleware/errorHandler');
 
 // ── GET /api/portfolio ────────────────────────────────────────
@@ -15,35 +15,49 @@ const getPortfolio = async (req, res, next) => {
       return next(new AppError('Portfolio not found', 404));
     }
 
+    // US holdings are priced in dollars: convert to rupees for the totals (rows keep their own currency)
+    const needsFx = portfolio.holdings.some((h) => h.exchange === 'NYSE' || h.exchange === 'NASDAQ');
+    let usdInr = null;
+    if (needsFx) {
+      try { usdInr = (await getStockQuote('INR=X')).price; } catch { /* totals fall back to unconverted below */ }
+    }
+
     // Fetch live prices for all holdings in parallel
     const holdingsWithPrices = await Promise.all(
       portfolio.holdings.map(async (holding) => {
+        const foreign = holding.exchange === 'NYSE' || holding.exchange === 'NASDAQ';
+        const currency = foreign ? 'USD' : 'INR';
+        const fxRate = foreign ? (usdInr || 1) : 1;
+        const base = { ...holding.toObject(), currency, fxRate };
         try {
           const quote = await getStockQuote(holding.symbol);
           const currentPrice = quote.price;
           const invested = holding.quantity * holding.averagePrice;
           const current = holding.quantity * currentPrice;
           const pl = current - invested;
-          const plPercent = (pl / invested) * 100;
+          const plPercent = invested ? (pl / invested) * 100 : 0;
 
           return {
-            ...holding.toObject(),
+            ...base,
             currentPrice,
             currentValue: current,
             pl,
             plPercent,
             todayChange: quote.changePercent,
+            investedInr: invested * fxRate,
+            valueInr: current * fxRate,
           };
         } catch (e) {
-          // If price fetch fails, return holding without live price
-          return { ...holding.toObject(), currentPrice: holding.averagePrice, error: 'Price unavailable' };
+          // If price fetch fails, show the buy price and flag it
+          const invested = holding.quantity * holding.averagePrice;
+          return { ...base, currentPrice: holding.averagePrice, currentValue: invested, pl: 0, plPercent: 0, investedInr: invested * fxRate, valueInr: invested * fxRate, error: 'Price unavailable' };
         }
       })
     );
 
-    // Calculate portfolio totals
-    const totalInvested = holdingsWithPrices.reduce((acc, h) => acc + h.quantity * h.averagePrice, 0);
-    const totalCurrent = holdingsWithPrices.reduce((acc, h) => acc + (h.currentValue || h.quantity * h.averagePrice), 0);
+    // Totals are always in rupees
+    const totalInvested = holdingsWithPrices.reduce((acc, h) => acc + h.investedInr, 0);
+    const totalCurrent = holdingsWithPrices.reduce((acc, h) => acc + h.valueInr, 0);
     const totalPL = totalCurrent - totalInvested;
     const totalPLPercent = totalInvested > 0 ? (totalPL / totalInvested) * 100 : 0;
 
@@ -58,6 +72,8 @@ const getPortfolio = async (req, res, next) => {
           totalPL,
           totalPLPercent,
           holdingsCount: portfolio.holdings.length,
+          usdInr: needsFx ? usdInr : null,
+          currency: 'INR',
         },
       },
     });
@@ -71,10 +87,24 @@ const getPortfolio = async (req, res, next) => {
 // Body: { symbol, name, quantity, averagePrice, sector, exchange }
 const addHolding = async (req, res, next) => {
   try {
-    const { symbol, name, quantity, averagePrice, sector, exchange, notes } = req.body;
+    const { symbol, name, sector: givenSector, exchange, notes } = req.body;
+    const quantity = Number(req.body.quantity);
+    const averagePrice = Number(req.body.averagePrice);
 
-    if (!symbol || !quantity || !averagePrice) {
-      return next(new AppError('Symbol, quantity, and averagePrice are required', 400));
+    if (!symbol || !name) {
+      return next(new AppError('Pick a stock from the search results first', 400));
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 1e9) {
+      return next(new AppError('Quantity must be a positive number', 400));
+    }
+    if (!Number.isFinite(averagePrice) || averagePrice <= 0 || averagePrice > 1e9) {
+      return next(new AppError('Buy price must be a positive number', 400));
+    }
+
+    // Stocks found only through search have no sector: look it up so allocation charts are meaningful
+    let sector = givenSector;
+    if (!sector || sector === 'Unknown') {
+      sector = (await getCompanyProfile(symbol.toUpperCase()).catch(() => null))?.sector || 'Other';
     }
 
     const portfolio = await Portfolio.findOne({ user: req.user.id });
@@ -130,6 +160,10 @@ const updateHolding = async (req, res, next) => {
   try {
     const { symbol } = req.params;
     const { quantity, averagePrice, notes } = req.body;
+    const bad = (v) => v !== undefined && (!Number.isFinite(Number(v)) || Number(v) <= 0);
+    if (bad(quantity) || bad(averagePrice)) {
+      return next(new AppError('Quantity and buy price must be positive numbers', 400));
+    }
 
     const portfolio = await Portfolio.findOne({ user: req.user.id });
     if (!portfolio) return next(new AppError('Portfolio not found', 404));
@@ -142,10 +176,11 @@ const updateHolding = async (req, res, next) => {
       return next(new AppError(`${symbol} not found in your portfolio`, 404));
     }
 
-    if (quantity !== undefined) portfolio.holdings[holdingIndex].quantity = quantity;
-    if (averagePrice !== undefined) portfolio.holdings[holdingIndex].averagePrice = averagePrice;
+    if (quantity !== undefined) portfolio.holdings[holdingIndex].quantity = Number(quantity);
+    if (averagePrice !== undefined) portfolio.holdings[holdingIndex].averagePrice = Number(averagePrice);
     if (notes !== undefined) portfolio.holdings[holdingIndex].notes = notes;
 
+    portfolio.totalInvested = portfolio.holdings.reduce((acc, h) => acc + h.quantity * h.averagePrice, 0);
     await portfolio.save();
     res.json({ success: true, message: 'Holding updated', portfolio });
   } catch (error) {

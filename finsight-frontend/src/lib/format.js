@@ -5,6 +5,14 @@ export const inr = (n, digits = 0) =>
     ? `₹${n.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits })}`
     : '—';
 
+// Amount in a holding's own currency (₹ for NSE stocks, $ for US stocks)
+export const money = (n, currency = 'INR', digits = 0) => {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
+  const symbol = currency === 'USD' ? '$' : '₹';
+  const locale = currency === 'USD' ? 'en-US' : 'en-IN';
+  return `${symbol}${n.toLocaleString(locale, { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
+};
+
 export const pct = (n, digits = 2) =>
   typeof n === 'number' && Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${n.toFixed(digits)}%` : '—';
 

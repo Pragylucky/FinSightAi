@@ -139,7 +139,7 @@ function Hero({ firstName, indices, loading }) {
             ) : !series.length ? (
               <div className="skeleton h-full rounded-xl mx-2" />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={240} initialDimension={{ width: 640, height: 240 }}>
                 <AreaChart data={series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
@@ -175,7 +175,7 @@ function PortfolioPanel({ portfolio, watchlistCount, navigate }) {
 
   const allocation = useMemo(() => {
     const bySector = {};
-    (holdings || []).forEach((h) => { bySector[h.sector || 'Other'] = (bySector[h.sector || 'Other'] || 0) + (h.currentValue ?? h.quantity * h.averagePrice); });
+    (holdings || []).forEach((h) => { bySector[h.sector || 'Other'] = (bySector[h.sector || 'Other'] || 0) + (h.valueInr ?? h.currentValue ?? h.quantity * h.averagePrice); });
     const total = Object.values(bySector).reduce((a, b) => a + b, 0);
     return Object.entries(bySector)
       .map(([name, v], i) => ({ name, value: Math.round((v / total) * 100), color: CHART_PALETTE[i % CHART_PALETTE.length] }))

@@ -189,6 +189,7 @@ export function EmptyState({ icon: Icon, title, description, action }) {
 
 // ─── ErrorNotice ──────────────────────────────────────────────────────────────
 export function ErrorNotice({ message, onRetry }) {
+  if (!message) return null;
   return (
     <div role="alert" className="flex items-center justify-between gap-3 p-3 bg-accent-red/10 border border-accent-red/20 rounded-lg text-sm text-accent-red">
       <span>{message}</span>

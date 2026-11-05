@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inr, pct, isMarketOpen, greeting, timeAgo } from '../src/lib/format.js';
+import { inr, money, pct, isMarketOpen, greeting, timeAgo } from '../src/lib/format.js';
 
 test('inr: Indian digit grouping and safe fallbacks', () => {
   assert.equal(inr(1234567), '₹12,34,567');
@@ -35,4 +35,11 @@ test('timeAgo: relative labels', () => {
   assert.equal(timeAgo('2026-11-04T09:00:00Z', now), '3h ago');
   assert.equal(timeAgo('2026-11-02T12:00:00Z', now), '2d ago');
   assert.equal(timeAgo('garbage', now), '');
+});
+
+test('money: rupees for NSE holdings, dollars for US holdings, safe fallback', () => {
+  assert.equal(money(1234567), '₹12,34,567');
+  assert.equal(money(349.5, 'USD', 2), '$349.50');
+  assert.equal(money(1234.5, 'USD', 0), '$1,235');
+  assert.equal(money(null, 'USD'), '—');
 });

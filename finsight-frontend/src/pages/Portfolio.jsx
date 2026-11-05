@@ -2,20 +2,21 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BriefcaseBusiness, Trash2 } from 'lucide-react';
+import { Plus, BriefcaseBusiness, Trash2, Pencil } from 'lucide-react';
 import { Card, SectionHeader, Badge, EmptyState, ErrorNotice, LoadingSkeleton } from '../components/ui';
 import { PortfolioPieChart } from '../components/charts';
 import { Stagger, Item, CountUp } from '../components/motion';
 import AddHoldingModal from '../components/portfolio/AddHoldingModal';
+import EditHoldingModal from '../components/portfolio/EditHoldingModal';
 import useApi from '../lib/useApi';
-import { inr } from '../lib/format';
+import { money } from '../lib/format';
 import api from '../services/api';
 import { CHART_PALETTE } from '../lib/theme';
 
 const fetchPortfolio = () => api.portfolio.get();
 
-function HoldingRow({ holding, onOpen, onRemove, removing }) {
-  const { symbol, name, quantity, averagePrice, sector } = holding;
+function HoldingRow({ holding, onOpen, onEdit, onRemove, removing }) {
+  const { symbol, name, quantity, averagePrice, sector, currency = 'INR' } = holding;
   const currentPrice = holding.currentPrice ?? averagePrice;
   const invested = quantity * averagePrice;
   const current = quantity * currentPrice;
@@ -37,17 +38,24 @@ function HoldingRow({ holding, onOpen, onRemove, removing }) {
       </td>
       <td className="py-3 pr-4"><Badge>{sector}</Badge></td>
       <td className="py-3 pr-4 font-mono text-sm text-text-secondary">{quantity}</td>
-      <td className="py-3 pr-4 font-mono text-sm text-text-secondary">{inr(averagePrice, 2)}</td>
+      <td className="py-3 pr-4 font-mono text-sm text-text-secondary">{money(averagePrice, currency, 2)}</td>
       <td className="py-3 pr-4 font-mono text-sm text-text-primary font-semibold">
-        {inr(currentPrice, 2)}
+        {money(currentPrice, currency, 2)}
         {holding.error && <span title={holding.error} className="ml-1 text-accent-warn">*</span>}
       </td>
-      <td className="py-3 pr-4 font-mono text-sm text-text-primary">{inr(current)}</td>
+      <td className="py-3 pr-4 font-mono text-sm text-text-primary">{money(current, currency)}</td>
       <td className="py-3 pr-4">
-        <p className={`font-mono text-sm font-semibold ${tone}`}>{pos ? '+' : '−'}{inr(Math.abs(pl))}</p>
+        <p className={`font-mono text-sm font-semibold ${tone}`}>{pos ? '+' : '−'}{money(Math.abs(pl), currency)}</p>
         <p className={`font-mono text-xs ${tone}`}>{pos ? '+' : ''}{plPct.toFixed(2)}%</p>
       </td>
-      <td className="py-3 text-right">
+      <td className="py-3 text-right whitespace-nowrap">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          aria-label={`Edit ${symbol}`}
+          className="p-1.5 rounded-md text-text-muted hover:text-accent-primary hover:bg-accent-primary/10 transition-colors"
+        >
+          <Pencil size={14} />
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
           disabled={removing}
@@ -65,6 +73,7 @@ export default function Portfolio() {
   const navigate = useNavigate();
   const { data, loading, error, reload } = useApi(fetchPortfolio, { allow404: true });
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState('');
   const [actionError, setActionError] = useState('');
 
@@ -75,7 +84,7 @@ export default function Portfolio() {
   const pos = totalPL >= 0;
 
   const bySector = {};
-  holdings.forEach((h) => { bySector[h.sector || 'Other'] = (bySector[h.sector || 'Other'] || 0) + (h.currentValue ?? h.quantity * h.averagePrice); });
+  holdings.forEach((h) => { bySector[h.sector || 'Other'] = (bySector[h.sector || 'Other'] || 0) + (h.valueInr ?? h.currentValue ?? h.quantity * h.averagePrice); });
   const total = Object.values(bySector).reduce((a, b) => a + b, 0);
   const allocation = Object.entries(bySector)
     .map(([name, v], i) => ({ name, value: Math.round((v / total) * 100), color: CHART_PALETTE[i % CHART_PALETTE.length] }))
@@ -149,9 +158,8 @@ export default function Portfolio() {
               <SectionHeader title="Profit and loss by holding" subtitle="Current value vs. amount invested" />
               <div className="space-y-3">
                 {holdings.map((h) => {
-                  const inv = h.quantity * h.averagePrice;
-                  const pl = (h.currentValue ?? inv) - inv;
-                  const pctVal = inv ? (pl / inv) * 100 : 0;
+                  const pl = h.pl ?? 0;
+                  const pctVal = h.plPercent ?? 0;
                   const width = Math.min(100, Math.abs(pctVal) * 2);
                   return (
                     <div key={h.symbol} className="flex items-center gap-3 text-xs">
@@ -188,17 +196,19 @@ export default function Portfolio() {
                   </thead>
                   <tbody>
                     {holdings.map((h) => (
-                      <HoldingRow key={h.symbol} holding={h} onOpen={() => navigate(`/company/${h.symbol}`)} onRemove={() => remove(h.symbol)} removing={removing === h.symbol} />
+                      <HoldingRow key={h.symbol} holding={h} onOpen={() => navigate(`/company/${h.symbol}`)} onEdit={() => setEditing(h)} onRemove={() => remove(h.symbol)} removing={removing === h.symbol} />
                     ))}
                   </tbody>
                 </table>
               </div>
+              {s?.usdInr && <p className="text-xs text-text-muted mt-3">US holdings are shown in dollars. Totals above are in rupees at ₹{s.usdInr.toFixed(2)} per $.</p>}
               {holdings.some((h) => h.error) && <p className="text-xs text-text-muted mt-3">* Live price unavailable; showing your buy price.</p>}
             </Card>
           </Item>
         </>
       )}
 
+      <EditHoldingModal holding={editing} onClose={() => setEditing(null)} onSuccess={reload} />
       <AddHoldingModal open={showAdd} onClose={() => setShowAdd(false)} onSuccess={reload} />
     </Stagger>
   );

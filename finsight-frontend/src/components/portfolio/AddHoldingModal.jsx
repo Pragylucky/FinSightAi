@@ -65,11 +65,11 @@ export default function AddHoldingModal({ open, onClose, onSuccess }) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-sm text-text-secondary mb-1 block" htmlFor="qty">Quantity</label>
-            <input id="qty" type="number" min="1" step="1" required className="input" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+            <input id="qty" type="number" min="0.0001" step="any" required className="input" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
           </div>
           <div>
-            <label className="text-sm text-text-secondary mb-1 block" htmlFor="avg">Buy price</label>
-            <input id="avg" type="number" min="0.01" step="0.01" required className="input" value={form.averagePrice} onChange={(e) => setForm({ ...form, averagePrice: e.target.value })} />
+            <label className="text-sm text-text-secondary mb-1 block" htmlFor="avg">Buy price <span className="text-text-muted">({form.stock && form.stock.exchange !== 'NSE' ? '$ per share' : '₹ per share'})</span></label>
+            <input id="avg" type="number" min="0.01" step="any" required className="input" value={form.averagePrice} onChange={(e) => setForm({ ...form, averagePrice: e.target.value })} />
           </div>
         </div>
 

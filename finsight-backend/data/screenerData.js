@@ -304,18 +304,18 @@ const screenerStocks = rows.map(([symbol, name, sector]) => ({
 
 // A few large US names, so search and company pages work beyond India.
 const usStocks = [
-  { symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ' },
-  { symbol: 'MSFT', name: 'Microsoft Corporation', exchange: 'NASDAQ' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', exchange: 'NASDAQ' },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', exchange: 'NASDAQ' },
-  { symbol: 'META', name: 'Meta Platforms', exchange: 'NASDAQ' },
-  { symbol: 'NVDA', name: 'NVIDIA Corporation', exchange: 'NASDAQ' },
-  { symbol: 'TSLA', name: 'Tesla Inc.', exchange: 'NASDAQ' },
-  { symbol: 'NFLX', name: 'Netflix Inc.', exchange: 'NASDAQ' },
-  { symbol: 'AMD', name: 'Advanced Micro Devices', exchange: 'NASDAQ' },
-  { symbol: 'JPM', name: 'JPMorgan Chase', exchange: 'NYSE' },
-  { symbol: 'V', name: 'Visa Inc.', exchange: 'NYSE' },
-  { symbol: 'KO', name: 'Coca-Cola Company', exchange: 'NYSE' },
+  { symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ', sector: 'Technology' },
+  { symbol: 'MSFT', name: 'Microsoft Corporation', exchange: 'NASDAQ', sector: 'Technology' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', exchange: 'NASDAQ', sector: 'Technology' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', exchange: 'NASDAQ', sector: 'Consumer' },
+  { symbol: 'META', name: 'Meta Platforms', exchange: 'NASDAQ', sector: 'Technology' },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation', exchange: 'NASDAQ', sector: 'Technology' },
+  { symbol: 'TSLA', name: 'Tesla Inc.', exchange: 'NASDAQ', sector: 'Automobile' },
+  { symbol: 'NFLX', name: 'Netflix Inc.', exchange: 'NASDAQ', sector: 'Media' },
+  { symbol: 'AMD', name: 'Advanced Micro Devices', exchange: 'NASDAQ', sector: 'Technology' },
+  { symbol: 'JPM', name: 'JPMorgan Chase', exchange: 'NYSE', sector: 'Banking' },
+  { symbol: 'V', name: 'Visa Inc.', exchange: 'NYSE', sector: 'Finance' },
+  { symbol: 'KO', name: 'Coca-Cola Company', exchange: 'NYSE', sector: 'Consumer' },
 ];
 
 // Old tickers people may still have saved or type. Maps to the current Yahoo ticker.
