@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B0A14"/><stop offset="1" stop-color="#1B1433"/>
+    </linearGradient>
+    <linearGradient id="txt" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#F472B6"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#F472B6"/>
+    </linearGradient>
+    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="blobA"><stop offset="0" stop-color="#8B5CF6" stop-opacity="0.45"/><stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/></radialGradient>
+    <radialGradient id="blobB"><stop offset="0" stop-color="#F472B6" stop-opacity="0.35"/><stop offset="1" stop-color="#F472B6" stop-opacity="0"/></radialGradient>
+    <clipPath id="c"><rect width="1200" height="320" rx="20"/></clipPath>
+  </defs>
+  <style>
+    .a{animation:drift 9s ease-in-out infinite alternate}
+    .b{animation:drift 12s ease-in-out infinite alternate-reverse}
+    @keyframes drift{from{transform:translate(0,0)}to{transform:translate(60px,30px)}}
+    .draw{stroke-dasharray:1400;stroke-dashoffset:1400;animation:draw 3.5s ease-out forwards}
+    @keyframes draw{to{stroke-dashoffset:0}}
+    .area{opacity:0;animation:fade 1.5s 2.5s ease-out forwards}
+    @keyframes fade{to{opacity:1}}
+    .in{opacity:0;transform:translateY(14px);animation:rise 1s ease-out forwards}
+    .d1{animation-delay:.2s}.d2{animation-delay:.6s}.d3{animation-delay:1s}
+    @keyframes rise{to{opacity:1;transform:none}}
+    .dot{animation:pulse 1.6s ease-in-out infinite}
+    @keyframes pulse{50%{opacity:.25}}
+    text{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+  </style>
+  <g clip-path="url(#c)">
+    <rect width="1200" height="320" fill="url(#bg)"/>
+    <circle class="a" cx="250" cy="60" r="260" fill="url(#blobA)"/>
+    <circle class="b" cx="1000" cy="280" r="260" fill="url(#blobB)"/>
+    <g stroke="#ffffff" stroke-opacity="0.04">
+      <path d="M0 80H1200M0 160H1200M0 240H1200M300 0V320M600 0V320M900 0V320"/>
+    </g>
+    <path class="area" d="M0 250 C120 240 160 200 260 215 S420 150 520 170 S700 90 800 110 S1000 40 1200 60 V320 H0Z" fill="url(#fill)"/>
+    <path class="draw" d="M0 250 C120 240 160 200 260 215 S420 150 520 170 S700 90 800 110 S1000 40 1200 60" fill="none" stroke="url(#line)" stroke-width="3" stroke-linecap="round"/>
+    <circle class="dot" cx="1180" cy="62" r="6" fill="#F472B6"/>
+    <text class="in d1" x="600" y="140" text-anchor="middle" font-size="76" font-weight="800" fill="url(#txt)">FinSight AI</text>
+    <text class="in d2" x="600" y="190" text-anchor="middle" font-size="24" fill="#E7E4FF">Research Indian stocks. Track a portfolio. Ask an AI.</text>
+    <text class="in d3" x="600" y="232" text-anchor="middle" font-size="16" letter-spacing="3" fill="#A29FC0">LIVE DATA · 265 NSE STOCKS · GEMINI ANALYSIS</text>
+  </g>
+</svg>

@@ -1,21 +1,25 @@
 <div align="center">
 
-# FinSight AI
+<img src="assets/banner.svg" alt="FinSight AI" width="100%" />
 
-**Research Indian stocks, track a portfolio and ask an AI about the market, in one place.**
+<a href="https://fin-sight-ai-six-kappa.vercel.app"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=700&lines=Live+prices+for+265+NSE+stocks;AI-written+company+analysis+(Gemini);Compare+up+to+4+stocks+side+by+side;Screener%2C+portfolio%2C+watchlist+%26+news;Try+it+as+a+guest+%E2%80%94+no+sign-up" alt="Typing animation of features" /></a>
 
 [![CI](https://github.com/Pragylucky/FinSightAi/actions/workflows/ci.yml/badge.svg)](https://github.com/Pragylucky/FinSightAi/actions/workflows/ci.yml)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![Node](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
-![Gemini](https://img.shields.io/badge/AI-Gemini-4285F4?logo=google&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white&style=flat-square)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white&style=flat-square)
+![Node](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white&style=flat-square)
+![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white&style=flat-square)
+![Gemini](https://img.shields.io/badge/AI-Gemini-8E75B2?logo=googlegemini&logoColor=white&style=flat-square)
+![Tailwind](https://img.shields.io/badge/Tailwind-3-06B6D4?logo=tailwindcss&logoColor=white&style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
-[**Live demo**](https://fin-sight-ai-six-kappa.vercel.app) · [API health](https://finsight-backend-jlvd.onrender.com/health)
+### [**Live demo**](https://fin-sight-ai-six-kappa.vercel.app) &nbsp;·&nbsp; [API health](https://finsight-backend-jlvd.onrender.com/health) &nbsp;·&nbsp; [Report a bug](https://github.com/Pragylucky/FinSightAi/issues)
 
-<sub>Tip: use **Try it as a guest** on the demo, no sign-up needed. The API runs on a free tier, so the first request after idle can take ~30 seconds to wake up.</sub>
+<sub>Tip: click **Try it as a guest** on the demo, no sign-up needed. The API runs on a free tier, so the first request after idle can take ~30 seconds.</sub>
 
 <img src="assets/screens/landing.png" alt="FinSight AI landing page" width="900" />
+
+<sub>Violet dark theme · animated page transitions · command palette (⌘K)</sub>
 
 </div>
 
