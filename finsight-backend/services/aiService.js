@@ -58,6 +58,7 @@ const callGemini = async (
     systemPrompt = SYSTEM_PROMPT,
     temperature = 0.4,
     maxOutputTokens = 1500,
+    json = false,
   } = {}
 ) => {
   if (!process.env.GEMINI_API_KEY) {
@@ -95,6 +96,7 @@ const callGemini = async (
           generationConfig: {
             temperature,
             maxOutputTokens,
+            ...(json ? { responseMimeType: 'application/json' } : {}),
           },
         },
         {
@@ -127,6 +129,7 @@ const callGemini = async (
         latencyMs: Date.now() - startedAt,
         inputTokens: usage.promptTokenCount ?? null,
         outputTokens: usage.candidatesTokenCount ?? null,
+        finishReason: response.data?.candidates?.[0]?.finishReason || null,
       };
 
     } catch (error) {
@@ -276,7 +279,9 @@ Do not wrap the response in markdown.
     systemPrompt:
       'You are a financial analyst. Analyze only the supplied data. Return only valid JSON with no markdown or additional commentary.',
     temperature: 0.2,
-    maxOutputTokens: 1000,
+    // Generous headroom: reasoning-capable models spend part of this budget before the JSON starts
+    maxOutputTokens: 4096,
+    json: true,
   });
 
   const analysis = parseJsonObject(call.text);
@@ -284,6 +289,7 @@ Do not wrap the response in markdown.
 
   // Don't pass a made-up "Neutral / 50" analysis off as real: fail so the UI can offer a retry
   if (!analysis || typeof analysis.summary !== 'string' || !analysis.summary.trim()) {
+    console.error(`Unreadable analysis (finishReason=${call.finishReason}, outputTokens=${call.outputTokens}):`, String(call.text).slice(0, 200));
     throw new Error('The AI returned an unreadable analysis. Please try again.');
   }
 
