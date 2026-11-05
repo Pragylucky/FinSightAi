@@ -292,6 +292,15 @@ select.input-field { appearance: none; cursor: pointer; }
 }
 .glow-border:hover::after { opacity: 1; }
 
+/* Card with a slowly flowing gradient border */
+.border-flow {
+  padding: 1px;
+  background: linear-gradient(110deg, rgb(var(--c-primary) / 0.7), rgb(var(--c-secondary) / 0.6), rgb(var(--c-border)), rgb(var(--c-primary) / 0.7));
+  background-size: 300% 100%;
+  animation: border-flow 8s linear infinite;
+}
+@keyframes border-flow { to { background-position: -300% 0; } }
+
 /* Slow breathing glow for key icons / logos */
 @keyframes breathe {
   0%, 100% { box-shadow: 0 0 0 0 rgb(var(--c-primary) / 0.35); }

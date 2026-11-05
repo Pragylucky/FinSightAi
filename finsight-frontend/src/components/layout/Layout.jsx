@@ -1,16 +1,14 @@
-// Layout.jsx — authenticated shell: sidebar + header + animated page outlet
+// Layout.jsx — authenticated shell: top navigation + animated page outlet
 
 import { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import Sidebar from './Sidebar';
-import Header from './Header';
+import TopNav from './TopNav';
 import CommandPalette from './CommandPalette';
 import { useAuth } from '../../context/AuthContext';
 import { PageTransition } from '../motion';
 
 export default function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, loading } = useAuth();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const location = useLocation();
@@ -55,12 +53,10 @@ export default function Layout() {
       <div className="aurora aurora-b" aria-hidden="true" />
       <div className="aurora aurora-c" aria-hidden="true" />
 
-      <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
+      <div className="relative z-10 flex flex-col min-h-screen min-w-0">
+        <TopNav onSearch={() => setPaletteOpen(true)} />
 
-      <div className="relative z-10 lg:ml-64 flex flex-col min-h-screen min-w-0">
-        <Header toggleSidebar={() => setSidebarOpen((o) => !o)} onSearch={() => setPaletteOpen(true)} />
-
-        <main className="flex-1 min-w-0 overflow-x-hidden p-4 lg:p-6">
+        <main className="flex-1 min-w-0 w-full max-w-[88rem] mx-auto [overflow-x:clip] px-4 lg:px-8 py-6 lg:py-8">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Outlet />
