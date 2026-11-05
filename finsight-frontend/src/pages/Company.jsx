@@ -1,11 +1,13 @@
 // Company.jsx — one company: quote, chart, financials, AI analysis, news
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Star, StarOff, Share2, Check, CheckCircle2, XCircle, Zap, AlertTriangle, ChevronDown, ChevronUp, SearchX } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { TrendingUp, TrendingDown, Star, StarOff, Share2, Scale, Check, CheckCircle2, XCircle, Zap, AlertTriangle, ChevronDown, ChevronUp, SearchX } from 'lucide-react';
 import { Card, Badge, Tabs, RiskMeter, SectionHeader, EmptyState, LoadingSkeleton } from '../components/ui';
 import useApi from '../lib/useApi';
 import { timeAgo } from '../lib/format';
+import { addRecent } from '../lib/recent';
+import StockSearch from '../components/common/StockSearch';
 import { StockChart, VolumeChart } from '../components/charts';
 import { motion } from 'framer-motion';
 import { Stagger, Item, CountUp } from '../components/motion';
@@ -141,7 +143,11 @@ function CompanyView({ sym }) {
   useEffect(() => {
     let cancelled = false;
     Promise.all([api.company.get(sym), api.company.getChart(sym, 30)])
-      .then(([c, ch]) => !cancelled && setState({ company: c.company, chart: ch.data || [], loading: false, error: '' }))
+      .then(([c, ch]) => {
+        if (cancelled) return;
+        addRecent(sym, c.company?.name);
+        setState({ company: c.company, chart: ch.data || [], loading: false, error: '' });
+      })
       .catch((err) => !cancelled && setState({ company: null, chart: [], loading: false, error: err.message }));
     return () => { cancelled = true; };
   }, [sym]);
@@ -196,12 +202,20 @@ function CompanyView({ sym }) {
 
   if (error || !c) {
     return (
-      <Card>
+      <Card className="overflow-visible">
         <EmptyState
           icon={SearchX}
           title={`Couldn't load ${sym}`}
           description={error || 'No data came back for this symbol.'}
-          action={<button onClick={() => navigate('/dashboard')} className="btn-secondary text-sm py-2">Back to dashboard</button>}
+          action={
+            <div className="w-full max-w-sm space-y-4">
+              <StockSearch placeholder="Search another company…" onSelect={(s) => navigate(`/company/${encodeURIComponent(s.symbol)}`)} onEnter={(q) => navigate(`/company/${encodeURIComponent(q.toUpperCase())}`)} />
+              <div className="flex justify-center gap-3">
+                <button onClick={() => window.location.reload()} className="btn-secondary text-sm py-2">Try again</button>
+                <Link to="/company" className="btn-ghost text-sm py-2">Browse companies</Link>
+              </div>
+            </div>
+          }
         />
       </Card>
     );
@@ -280,6 +294,7 @@ function CompanyView({ sym }) {
                 {inWatchlist ? <Star size={15} fill="currentColor" /> : <StarOff size={15} />}
                 {inWatchlist ? 'Watching' : 'Watchlist'}
               </motion.button>
+              <Link to={`/compare?s=${encodeURIComponent(sym)}`} className="flex items-center gap-2 px-3 py-2 border border-bg-border rounded-lg text-sm text-text-secondary hover:text-accent-primary hover:border-accent-primary/40 transition-colors"><Scale size={15} /> <span className="hidden sm:inline">Compare</span></Link>
               <button onClick={share} aria-label="Copy link" title="Copy link" className="p-2 border border-bg-border rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors">
                 {copied ? <Check size={16} className="text-accent-green" /> : <Share2 size={16} />}
               </button>

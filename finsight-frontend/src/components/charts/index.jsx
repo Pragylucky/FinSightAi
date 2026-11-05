@@ -71,7 +71,7 @@ export function StockChart({
             className={`
               px-3 py-1 rounded-md text-xs font-semibold transition-all
               ${activeRange === label
-                ? 'bg-accent-primary text-bg-primary'
+                ? 'bg-accent-primary text-white'
                 : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
               }
             `}

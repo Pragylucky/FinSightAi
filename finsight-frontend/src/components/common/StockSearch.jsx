@@ -3,7 +3,8 @@ import { Search, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 
 // Debounced symbol search. Calls onSelect(stock) when a result is picked.
-export default function StockSearch({ onSelect, placeholder = 'Search TCS, Infosys, Reliance…' }) {
+// onEnter(query): optional; called when Enter is pressed with no suggestion to pick.
+export default function StockSearch({ onSelect, onEnter, placeholder = 'Search TCS, Infosys, Reliance…', autoFocus = false, className = '' }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -46,8 +47,23 @@ export default function StockSearch({ onSelect, placeholder = 'Search TCS, Infos
     }, 250);
   };
 
+  const pick = (stock) => {
+    onSelect(stock);
+    setQuery('');
+    setResults([]);
+    latest.current += 1;
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') setResults([]);
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (results[0]) pick(results[0]);
+    else if (onEnter && query.trim()) onEnter(query.trim());
+  };
+
   return (
-    <div className="relative" ref={box}>
+    <div className={`relative ${className}`} ref={box}>
       <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
       <input
         className="input-field pl-9"
@@ -56,6 +72,8 @@ export default function StockSearch({ onSelect, placeholder = 'Search TCS, Infos
         onChange={handleChange}
         aria-label="Search stocks"
         autoComplete="off"
+        autoFocus={autoFocus}
+        onKeyDown={onKeyDown}
       />
       {loading && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-text-muted" />}
 
@@ -65,15 +83,10 @@ export default function StockSearch({ onSelect, placeholder = 'Search TCS, Infos
             <li key={stock.symbol}>
               <button
                 type="button"
-                onClick={() => {
-                  onSelect(stock);
-                  setQuery(stock.symbol);
-                  setResults([]);
-                  latest.current += 1;
-                }}
+                onClick={() => pick(stock)}
                 className="w-full text-left px-4 py-3 hover:bg-bg-tertiary transition-colors"
               >
-                <p className="font-semibold text-sm text-text-primary">{stock.symbol}</p>
+                <p className="font-semibold text-sm text-text-primary">{stock.symbol} <span className="font-normal text-xs text-text-muted ml-1">{stock.exchange}</span></p>
                 <p className="text-xs text-text-muted">{stock.name}</p>
               </button>
             </li>

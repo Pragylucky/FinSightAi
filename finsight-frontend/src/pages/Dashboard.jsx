@@ -72,7 +72,7 @@ export default function Dashboard() {
         <p className="text-text-secondary text-sm mt-1">Here&apos;s where your money and the market stand today.</p>
       </Item>
 
-      <Item className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <Item className="grid grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
         {market.loading
           ? [0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-[62px] rounded-lg" />)
           : indices.map((i) => <IndexCard key={i.name} name={i.name} value={i.value} change={i.change} />)}
@@ -99,7 +99,7 @@ export default function Dashboard() {
           <Card>
             <SectionHeader
               title="Top movers"
-              subtitle="Across ~100 large NSE stocks, today"
+              subtitle="Across ~265 NSE stocks, today"
               action={<button onClick={() => navigate('/screener')} className="flex items-center gap-1 text-xs text-accent-primary hover:underline">Screener <ArrowRight size={12} /></button>}
             />
             {market.loading ? <LoadingSkeleton lines={5} height="h-8" /> : market.error ? (

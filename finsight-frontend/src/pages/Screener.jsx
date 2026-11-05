@@ -3,15 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowUp, ArrowDown, SlidersHorizontal, Loader2, RotateCcw } from 'lucide-react';
-import { Card, SectionHeader, EmptyState, ErrorNotice, LoadingSkeleton } from '../components/ui';
+import { Card, SectionHeader, EmptyState, ErrorNotice, LoadingSkeleton, Chips } from '../components/ui';
 import { motion } from 'framer-motion';
 import useApi from '../lib/useApi';
 import api from '../services/api';
 
-const fetchStocks = () => api.screener.get({ limit: 150 });
+const fetchStocks = () => api.screener.get({ limit: 300 });
 
 const PAGE = 30;
-const DEFAULTS = { sector: 'all', peMax: 100, roeMin: 0 };
+const DEFAULTS = { sector: 'all', cap: 'all', peMax: 100, roeMin: 0 };
 
 const COLUMNS = [
   { col: 'price', label: 'Price' },
@@ -55,6 +55,7 @@ export default function Screener() {
   const matches = stocks.filter((s) =>
     (s.name.toLowerCase().includes(q) || s.symbol.toLowerCase().includes(q)) &&
     (filters.sector === 'all' || s.sector === filters.sector) &&
+    (filters.cap === 'all' || s.capClass === filters.cap) &&
     (filters.peMax >= 100 || (s.pe != null && s.pe <= filters.peMax)) &&
     (filters.roeMin <= 0 || (s.roe != null && s.roe >= filters.roeMin)));
 
@@ -71,11 +72,11 @@ export default function Screener() {
   };
 
   const setFilter = (patch) => { setFilters((f) => ({ ...f, ...patch })); setVisible(PAGE); };
-  const dirty = filtering || filters.sector !== 'all' || search;
+  const dirty = filtering || filters.sector !== 'all' || filters.cap !== 'all' || search;
 
   return (
     <div className="space-y-5">
-      <SectionHeader title="Stock screener" subtitle="Live prices and fundamentals for large NSE companies" />
+      <SectionHeader title="Stock screener" subtitle="Live prices and fundamentals across ~265 NSE companies: large, mid and small caps" />
 
       <Card>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -100,6 +101,11 @@ export default function Screener() {
             <label htmlFor="scr-roe" className="text-xs text-text-muted mb-1 block">Min ROE: {filters.roeMin > 0 ? `${filters.roeMin}%` : 'any'}</label>
             <input id="scr-roe" type="range" min={0} max={50} value={filters.roeMin} onChange={(e) => setFilter({ roeMin: +e.target.value })} className="w-full accent-accent-primary mt-2" />
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          <span className="text-xs text-text-muted mr-1">Market cap</span>
+          <Chips value={filters.cap} onChange={(cap) => setFilter({ cap })} options={[{ value: 'all', label: 'All' }, { value: 'Large', label: 'Large cap' }, { value: 'Mid', label: 'Mid cap' }, { value: 'Small', label: 'Small cap' }]} />
         </div>
 
         <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
@@ -159,7 +165,7 @@ export default function Screener() {
                           <div className="w-7 h-7 rounded bg-bg-tertiary border border-bg-border flex items-center justify-center text-xs font-bold font-mono text-accent-primary">{s.symbol[0]}</div>
                           <div>
                             <p className="font-semibold text-text-primary group-hover:text-accent-primary transition-colors text-xs">{s.symbol}</p>
-                            <p className="text-text-muted text-xs">{s.sector}</p>
+                            <p className="text-text-muted text-xs">{s.sector}{s.capClass ? ` · ${s.capClass}` : ''}</p>
                           </div>
                         </div>
                       </td>

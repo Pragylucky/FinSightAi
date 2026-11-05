@@ -215,7 +215,7 @@ export function Tabs({ tabs, activeTab, onChange }) {
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={`relative px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-              active ? 'text-bg-primary font-semibold' : 'text-text-secondary hover:text-text-primary'
+              active ? 'text-white font-semibold' : 'text-text-secondary hover:text-text-primary'
             }`}
           >
             {active && (
@@ -246,7 +246,7 @@ export function Chips({ options, value, onChange, className = '' }) {
             onClick={() => onChange(o.value)}
             aria-pressed={active}
             className={`relative px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-colors border ${
-              active ? 'text-bg-primary border-transparent font-semibold' : 'bg-bg-secondary border-bg-border text-text-secondary hover:text-text-primary hover:border-accent-primary/30'
+              active ? 'text-white border-transparent font-semibold' : 'bg-bg-secondary border-bg-border text-text-secondary hover:text-text-primary hover:border-accent-primary/30'
             }`}
           >
             {active && (

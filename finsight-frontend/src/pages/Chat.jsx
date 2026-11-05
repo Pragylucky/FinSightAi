@@ -79,7 +79,7 @@ function Message({ msg }) {
       transition={{ duration: 0.35, ease: EASE }}
     >
       <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center ${isAI ? 'bg-gradient-to-br from-accent-primary to-accent-secondary shadow-lg shadow-accent-primary/20' : 'bg-bg-tertiary border border-bg-border'}`}>
-        {isAI ? <Zap size={14} className="text-bg-primary" /> : <User size={14} className="text-text-secondary" />}
+        {isAI ? <Zap size={14} className="text-white" /> : <User size={14} className="text-text-secondary" />}
       </div>
 
       <div className={`min-w-0 max-w-[85%] sm:max-w-[80%] ${!isAI ? 'flex flex-col items-end' : ''}`}>
@@ -105,7 +105,7 @@ function Typing() {
   return (
     <motion.div className="flex gap-3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center shrink-0">
-        <Zap size={14} className="text-bg-primary" />
+        <Zap size={14} className="text-white" />
       </div>
       <div className="bg-bg-secondary border border-bg-border rounded-2xl rounded-tl-none px-4 py-3.5 flex items-center gap-1.5" aria-label="FinSight is thinking">
         {[0, 1, 2].map((d) => (
@@ -209,7 +209,7 @@ export default function Chat() {
         )}
       </AnimatePresence>
 
-      <div className="flex items-end gap-3 bg-bg-secondary border border-bg-border rounded-xl p-3 focus-within:border-accent-primary/50 focus-within:shadow-[0_0_0_3px_rgba(245,181,68,0.08)] transition-all">
+      <div className="flex items-end gap-3 bg-bg-secondary border border-bg-border rounded-xl p-3 focus-within:border-accent-primary/50 focus-within:shadow-[0_0_0_3px_rgba(139,92,246,0.08)] transition-all">
         <textarea
           ref={taRef}
           value={input}
@@ -225,7 +225,7 @@ export default function Chat() {
           disabled={!canSend}
           aria-label="Send"
           whileTap={canSend ? { scale: 0.9 } : undefined}
-          className={`p-2.5 rounded-lg shrink-0 transition-colors ${canSend ? 'bg-accent-primary text-bg-primary hover:bg-accent-primary/90' : 'bg-bg-tertiary text-text-muted cursor-not-allowed'}`}
+          className={`p-2.5 rounded-lg shrink-0 transition-colors ${canSend ? 'bg-accent-primary text-white hover:bg-accent-primary/90' : 'bg-bg-tertiary text-text-muted cursor-not-allowed'}`}
         >
           <Send size={16} />
         </motion.button>

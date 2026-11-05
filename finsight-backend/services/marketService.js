@@ -12,12 +12,15 @@ const { screenerStocks } = require('../data/screenerData');
 const QUOTE_REFRESH_MS = 5 * 60 * 1000;
 const FUNDAMENTALS_REFRESH_MS = 6 * 60 * 60 * 1000;
 const FUNDAMENTALS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const CONCURRENCY = 4;
+const CONCURRENCY = 5;
 
 const stocks = new Map(); // symbol -> row
 let updatedAt = null;
 let quotesInFlight = null;
 let fundamentalsRunning = false;
+
+// Rough SEBI-style buckets by market cap (₹ crore): Large >= 80,000, Mid >= 25,000, otherwise Small
+const capClass = (cr) => (cr == null ? null : cr >= 80000 ? 'Large' : cr >= 25000 ? 'Mid' : 'Small');
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -47,6 +50,7 @@ const refreshQuotes = () => {
             change: num(q.regularMarketChange) ?? 0,
             changePercent: num(q.regularMarketChangePercent) ?? 0,
             marketCap: num(q.marketCap) ? q.marketCap / 1e7 : null, // ₹ crore
+            capClass: num(q.marketCap) ? capClass(q.marketCap / 1e7) : null,
             pe: num(q.trailingPE),
             pb: num(q.priceToBook),
             div: num(q.dividendYield) ?? (num(q.trailingAnnualDividendYield) != null ? q.trailingAnnualDividendYield * 100 : null),
@@ -164,8 +168,8 @@ const getOverview = async () => {
 
   return {
     indices,
-    gainers: byChange.slice(0, 5).map(slim),
-    losers: byChange.slice(-5).reverse().map(slim),
+    gainers: byChange.slice(0, 6).map(slim),
+    losers: byChange.slice(-6).reverse().map(slim),
     ticker: [
       ...indices.map((i) => ({ symbol: i.name, price: i.value, change: i.change })),
       ...[...priced].sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)).slice(0, 14).map((s) => ({ symbol: s.symbol, price: s.price, change: s.changePercent })),

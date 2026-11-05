@@ -2,6 +2,7 @@
 
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/layout/Layout';
 
 const Landing = lazy(() => import('./pages/Landing'));
@@ -10,6 +11,9 @@ const ResetPassword = lazy(() => import('./pages/PasswordReset').then((m) => ({ 
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Company = lazy(() => import('./pages/Company'));
+const CompanyHub = lazy(() => import('./pages/CompanyHub'));
+const Compare = lazy(() => import('./pages/Compare'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 const Chat = lazy(() => import('./pages/Chat'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
 const Watchlist = lazy(() => import('./pages/Watchlist'));
@@ -23,6 +27,7 @@ const Signup = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Signu
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <Suspense fallback={<div className="route-loader" />}>
         <Routes>
@@ -39,7 +44,9 @@ export default function App() {
           {/* Protected routes — sidebar + header */}
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/company" element={<CompanyHub />} />
             <Route path="/company/:symbol" element={<Company />} />
+            <Route path="/compare" element={<Compare />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/watchlist" element={<Watchlist />} />
@@ -49,9 +56,10 @@ export default function App() {
             <Route path="/learn" element={<Learn />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }

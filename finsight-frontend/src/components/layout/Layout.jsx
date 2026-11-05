@@ -29,9 +29,10 @@ export default function Layout() {
 
   // Tab title follows the page
   useEffect(() => {
-    const names = { dashboard: 'Dashboard', chat: 'AI Chat', portfolio: 'Portfolio', watchlist: 'Watchlist', news: 'News', screener: 'Screener', funds: 'Mutual Funds', learn: 'Learn', company: 'Company' };
+    const names = { dashboard: 'Dashboard', chat: 'AI Chat', portfolio: 'Portfolio', watchlist: 'Watchlist', news: 'News', screener: 'Screener', funds: 'Mutual Funds', learn: 'Learn', company: 'Company', compare: 'Compare' };
     const seg = location.pathname.split('/')[1];
-    const sym = seg === 'company' ? ` · ${decodeURIComponent(location.pathname.split('/')[2] || '')}` : '';
+    const raw = location.pathname.split('/')[2];
+    const sym = seg === 'company' && raw ? ` · ${decodeURIComponent(raw)}` : '';
     document.title = `${names[seg] || 'FinSight'}${sym} — FinSight AI`;
   }, [location.pathname]);
 
@@ -52,6 +53,7 @@ export default function Layout() {
       <div className="app-bg" aria-hidden="true" />
       <div className="aurora aurora-a" aria-hidden="true" />
       <div className="aurora aurora-b" aria-hidden="true" />
+      <div className="aurora aurora-c" aria-hidden="true" />
 
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 

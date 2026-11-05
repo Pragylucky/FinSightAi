@@ -1,314 +1,189 @@
-# 🚀 FinSight AI
+<div align="center">
 
-> AI-Powered Financial Intelligence Platform for smarter investment research, portfolio management, and financial analysis.
+# FinSight AI
 
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
-![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js)
-![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248?logo=mongodb)
-![Gemini AI](https://img.shields.io/badge/AI-Gemini-4285F4)
+**Research Indian stocks, track a portfolio and ask an AI about the market, in one place.**
+
+[![CI](https://github.com/Pragylucky/FinSightAi/actions/workflows/ci.yml/badge.svg)](https://github.com/Pragylucky/FinSightAi/actions/workflows/ci.yml)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![Node](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
+![Gemini](https://img.shields.io/badge/AI-Gemini-4285F4?logo=google&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
----
+[**Live demo**](https://fin-sight-ai-six-kappa.vercel.app) · [API health](https://finsight-backend-jlvd.onrender.com/health)
 
-## 📖 Overview
+<sub>Tip: use **Try it as a guest** on the demo, no sign-up needed. The API runs on a free tier, so the first request after idle can take ~30 seconds to wake up.</sub>
 
-FinSight AI is a modern full-stack financial intelligence platform built to simplify stock market research and portfolio management.
+<img src="assets/screens/landing.png" alt="FinSight AI landing page" width="900" />
 
-Users can analyze companies, manage their investment portfolio, create personalized watchlists, explore financial news, interact with an AI financial assistant, and learn investing concepts—all from a single responsive dashboard.
-
-The project combines modern web technologies with financial APIs and AI to provide an intuitive investment research experience.
+</div>
 
 ---
 
-# ✨ Features
+## What it does
 
-## 📊 Dashboard
+| | |
+|---|---|
+| **Live market data** | Real prices, indices, top gainers/losers and a ticker, for ~265 NSE stocks (large, mid and small caps), refreshed from Yahoo Finance. No mock data. |
+| **Company analysis** | Search any listed company: live quote, price chart, key metrics (PE, PB, ROE, debt/equity, yield), quarterly results, news and an **AI-written analysis** with strengths, risks, outlook and a risk score. |
+| **Compare stocks** | Up to four companies side by side: a rebased 3-month performance chart plus a metrics table with the best value in each row marked. |
+| **Stock screener** | Filter ~265 stocks by sector, market-cap class, PE and ROE; sort any column; fundamentals stream in the background. |
+| **AI chat** | Gemini-powered assistant that is handed **live quotes and ratios** for any stock you mention, so answers use real numbers. |
+| **News** | Market headlines with search and filters (topic, stock, sentiment) and a sentiment estimate per story. |
+| **Portfolio & watchlist** | Add holdings and targets, see value and P&L at live prices, sector allocation and per-holding returns. |
+| **Mutual funds, SIP calculator, finance dictionary** | Fund returns from NAV history, a SIP growth calculator and a plain-English glossary. |
+| **Polish** | Command palette (⌘K), page transitions, guest mode, responsive down to phone width, keyboard-accessible, reduced-motion aware. |
 
-- Personalized greeting
-- Market overview
-- Portfolio summary
-- Profit & Loss tracking
-- Watchlist overview
-- Top Gainers & Losers
-- Sector allocation charts
-- Market ticker
-
----
-
-## 📈 Company Analysis
-
-- Search listed companies
-- Live stock information
-- Company overview
-- Financial statements
-- Revenue & Profit charts
-- Balance Sheet
-- Quarterly Results
-- Key Financial Ratios
-- Interactive visualizations
-- AI-generated company summary
-
----
-
-## 💼 Portfolio Management
-
-- Add & manage holdings
-- Track invested amount
-- Current portfolio value
-- Profit & Loss calculation
-- Portfolio analytics
-- Sector allocation
+<table>
+  <tr>
+    <td><img src="assets/screens/dashboard.png" alt="Dashboard" /></td>
+    <td><img src="assets/screens/company.png" alt="Company analysis" /></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screens/compare.png" alt="Compare stocks" /></td>
+    <td><img src="assets/screens/screener.png" alt="Screener" /></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screens/news.png" alt="News with filters" /></td>
+    <td><img src="assets/screens/company-hub.png" alt="Company analysis hub" /></td>
+  </tr>
+</table>
 
 ---
 
-## ⭐ Watchlist
+## Engineering highlights
 
-- Add favorite stocks
-- Live market prices
-- Target price tracking
-- Personal notes
-- Quick company access
+These are the problems that were interesting to solve, not just features that were wired up.
 
----
-
-## 🤖 AI Financial Assistant
-
-- Explain financial concepts
-- Simplify financial reports
-- Company insights
-- Investment-related Q&A
-- Powered by Google Gemini
+- **Resilient market-data layer.** Yahoo's response schema changes often; a strict validation error used to blank an entire company profile. Calls now run with `validateResult: false`, fall back to a lighter endpoint, and serve the **last good value from a 24-hour stale cache** instead of failing, and the app never fabricates data. When a source is down it says so.
+- **Background snapshot service.** Screener, movers, ticker and landing page are served from an in-memory snapshot of ~265 stocks: two batched quote calls every 5 minutes, plus a bounded worker pool (5 concurrent) that fetches slower fundamentals once a day. First paint is instant instead of ~265 calls per request; partial data is flagged so the UI can show progress.
+- **AI that isn't blocking and isn't made up.** Analysis lives on its own cached endpoint (6 h TTL) so a slow model call never breaks the company page; output is parsed defensively (markdown fences, extra prose) and validated; on failure it returns an error with a retry instead of a fake "Neutral" result. Chat detects stocks in the user's message and injects live data into the prompt.
+- **Auth hardened end to end.** JWT access token plus `httpOnly` refresh cookie (`SameSite=None; Secure` in production for the cross-site Vercel ↔ Render setup), refresh-interceptor that can't deadlock on auth endpoints, rate limiting per IP behind a proxy, hashed reset tokens, optional email verification via a **6-digit code** (hashed at rest, 15-minute expiry, 5-attempt cap, resend cooldown), and one-click **guest accounts** that a nightly job garbage-collects.
+- **Safe rendering.** AI replies go through a small Markdown renderer that builds React nodes (no `innerHTML`), closing an XSS hole.
+- **Frontend architecture.** Route-level code splitting, a single design-token layer (CSS variables → Tailwind) so the whole palette changes in one place, shared motion primitives (`Stagger`, `Reveal`, `CountUp`), an error boundary, accessible modals/tabs, and a `prefers-reduced-motion` guard.
+- **Quality gates.** ESLint clean, unit tests for the pure logic (symbol resolution, sentiment scoring, stock mention detection, formatters, universe integrity) and a GitHub Actions workflow that lints, tests and builds both apps on every push.
 
 ---
 
-## 📰 Financial News
+## Architecture
 
-- Latest financial news
-- Company-specific news
-- Market headlines
+```mermaid
+flowchart LR
+  U[Browser: React 19 + Vite] -- REST + JWT --> API[Express API]
+  API --> DB[(MongoDB: users, portfolios, watchlists)]
+  API --> MS[Market snapshot service]
+  MS -- batched quotes / fundamentals --> Y[(Yahoo Finance)]
+  API -- quotes, profiles, charts, news --> Y
+  API -- prompts + live data --> G[(Gemini API)]
+  API -- NAV history --> MF[(mfapi.in)]
+  API -- verification / reset --> E[(Resend or SMTP)]
+```
 
----
-
-## 🔍 Stock Screener
-
-- Browse companies
-- Financial filters
-- Company comparison
-
----
-
-## 💰 Mutual Funds
-
-- Browse mutual funds
-- Fund information
-- Performance overview
-
----
-
-## 📚 Learning Hub
-
-- Investment basics
-- Financial concepts
-- Beginner-friendly learning resources
-
----
-
-# 🔐 Authentication
-
-- User Registration
-- Secure Login
-- JWT Authentication
-- Email Verification
-- Protected Routes
-- Password Hashing
-
----
-
-# 🛠 Tech Stack
-
-## Frontend
-
-- React.js
-- Vite
-- Tailwind CSS
-- React Router
-- Axios
-- Recharts
-- Lucide React
-
-## Backend
-
-- Node.js
-- Express.js
-- JWT Authentication
-- REST APIs
-- Express Validator
-- Bcrypt
-- Nodemailer
-
-## Database
-
-- MongoDB Atlas
-
-## AI & External APIs
-
-- Google Gemini API
-- Finnhub API
-
----
-
-# 📂 Project Structure
-
-```text
-FinSightAI
-│
-├── finsight-frontend
-│   ├── public
-│   ├── src
-│   │   ├── components
-│   │   ├── context
-│   │   ├── data
-│   │   ├── pages
-│   │   ├── services
-│   │   └── assets
-│   └── package.json
-│
-├── finsight-backend
-│   ├── config
-│   ├── controllers
-│   ├── middleware
-│   ├── models
-│   ├── routes
-│   ├── services
-│   ├── utils
-│   └── package.json
-│
-└── README.md
+```
+finsight-frontend/   React app (pages, components, motion, lib, tests)
+finsight-backend/    Express API (controllers, services, models, middleware, tests)
+.github/workflows/   CI: lint + test + build for both apps
+assets/              screenshots used in this README
 ```
 
 ---
 
-# 📸 Screenshots
+## Tech stack
 
-| Dashboard | Company Analysis |
-|------------|------------------|
-| ![](assets/dashboard.png) | ![](assets/company-analysis.png) |
-
-| Portfolio | Watchlist |
-|------------|------------|
-| ![](assets/portfolio.png) | ![](assets/watchlist.png) |
-
-| AI Assistant | Financial News |
-|---------------|----------------|
-| ![](assets/ai-chat.png) | ![](assets/financial-news.png) |
-
-| Stock Screener | Learning Hub |
-|-----------------|--------------|
-| ![](assets/screener.png) | ![](assets/learning.png) |
+**Frontend** React 19, Vite, React Router 7, Tailwind CSS, Framer Motion, Recharts, Lucide icons, Axios
+**Backend** Node.js, Express, Mongoose, JWT, bcrypt, Helmet, express-rate-limit, node-cron, Nodemailer / Resend
+**Data & AI** Yahoo Finance (`yahoo-finance2`), mfapi.in, Google Gemini
+**Tooling** ESLint, Node's built-in test runner, GitHub Actions, Vercel (frontend), Render (backend), MongoDB Atlas
 
 ---
 
-# 🚀 Installation
+## Getting started
 
-## Clone Repository
+Prerequisites: Node 20+, a MongoDB connection string, and (optional) a [Gemini API key](https://aistudio.google.com).
 
 ```bash
 git clone https://github.com/Pragylucky/FinSightAi.git
 cd FinSightAi
-```
 
----
+# Backend
+cd finsight-backend
+cp .env.example .env        # fill in MONGODB_URI, JWT secrets, GEMINI_API_KEY
+npm install
+npm run dev                 # http://localhost:5000
 
-## Frontend
-
-```bash
+# Frontend (new terminal)
 cd finsight-frontend
 npm install
-npm run dev
+echo "VITE_API_URL=http://localhost:5000/api" > .env
+npm run dev                 # http://localhost:3000
 ```
 
-Runs on:
+Everything works without an email provider: with verification off (the default) sign-up logs you in immediately, and **Try it as a guest** needs nothing at all.
 
-```
-http://localhost:3000
-```
+### Environment variables
 
----
+| Variable | Where | Purpose |
+|---|---|---|
+| `MONGODB_URI` | backend | Database connection |
+| `JWT_SECRET`, `JWT_REFRESH_SECRET` | backend | Token signing (use long random strings) |
+| `CLIENT_URL` | backend | Allowed CORS origin and link base (no trailing slash) |
+| `GEMINI_API_KEY` | backend | AI chat and company analysis |
+| `GEMINI_MODEL` | backend, optional | Override the default model |
+| `REQUIRE_EMAIL_VERIFICATION` | backend, optional | `true` to require the emailed 6-digit code |
+| `RESEND_API_KEY` or `EMAIL_HOST/PORT/USER/PASS` | backend, optional | Email for codes and password reset |
+| `FINNHUB_API_KEY` | backend, optional | Extra global headlines |
+| `NODE_ENV=production` | backend | Enables secure cross-site cookies |
+| `VITE_API_URL` | frontend | Backend base URL, ending in `/api` |
 
-## Backend
+See [`finsight-backend/.env.example`](finsight-backend/.env.example) for the full list.
+
+### Tests
 
 ```bash
-cd finsight-backend
-npm install
-npm run dev
-```
-
-Runs on:
-
-```
-http://localhost:5000
+cd finsight-backend  && npm test
+cd finsight-frontend && npm run lint && npm test && npm run build
 ```
 
 ---
 
-# 🔑 Environment Variables
+## API overview
 
-Create a `.env` file inside the backend folder.
+All routes are under `/api`. Everything except auth and `GET /market/pulse` requires a bearer token.
 
-```env
-PORT=5000
-
-MONGODB_URI=YOUR_MONGODB_URI
-
-JWT_SECRET=YOUR_SECRET
-
-JWT_EXPIRE=7d
-
-EMAIL_USER=YOUR_EMAIL
-
-EMAIL_PASS=YOUR_EMAIL_PASSWORD
-
-GEMINI_API_KEY=YOUR_GEMINI_KEY
-
-FINNHUB_API_KEY=YOUR_FINNHUB_KEY
-```
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /auth/register` · `/login` · `/guest` · `/refresh` · `/logout` · `/verify-email` · `/resend-code` · `/forgot-password` · `/reset-password/:token` · `GET /auth/me` |
+| Market | `GET /market/overview` · `GET /market/pulse` (public) |
+| Companies | `GET /companies/search?q=` · `/:symbol` · `/:symbol/analysis` · `/:symbol/chart?days=` · `/:symbol/quote` · `/:symbol/news` |
+| Screener | `GET /screener` (sector, cap, PE/ROE filters, sort, paging) · `/screener/sectors` |
+| Portfolio / watchlist | `GET/POST /portfolio`, `/portfolio/holdings` · `GET/POST/PUT/DELETE /watchlist` |
+| News · Funds · AI | `GET /news` · `GET /mutual-funds` · `POST /ai/chat` |
 
 ---
 
-# 🎯 Future Improvements
+## Deploying
 
-- Real-time stock price updates
-- AI portfolio recommendations
-- Advanced stock alerts
-- News sentiment analysis
-- Portfolio performance forecasting
-- Mobile application
-- Dark / Light theme
-
----
-🌐 Live Demo:
-https://fin-sight-ai-six-kappa.vercel.app
-
-⚙️ Backend API:
-https://finsight-backend-jlvd.onrender.com
-
-# 👨‍💻 Author
-
-### Ronak Singh
-
-- GitHub: https://github.com/Pragylucky
-- LinkedIn: https://www.linkedin.com/in/ronak-singh-79234328a/
+- **Backend (Render or similar):** set the variables above, `NODE_ENV=production`, and `CLIENT_URL` to your frontend URL. Free tiers block outbound SMTP, so use `RESEND_API_KEY` if you enable verification or password reset.
+- **Frontend (Vercel):** set `VITE_API_URL` to `https://<your-api>/api` and redeploy.
+- After a cold start the stock snapshot warms in the background (~1 minute); the ROE / debt / growth columns fill in as they arrive.
 
 ---
 
-# ⭐ Support
+## Roadmap
 
-If you found this project useful, consider giving it a ⭐ on GitHub!
-
-It helps others discover the project and motivates future development.
+- Real-time quotes over WebSockets and price alerts
+- Historical portfolio performance (daily snapshots)
+- Persisted chat history and saved screens
+- Broader coverage: all NSE equities and BSE, with sector indices
 
 ---
 
-## 📄 License
+## Author
 
-This project is licensed under the MIT License.
+**Ronak Singh**
+[GitHub](https://github.com/Pragylucky) · [LinkedIn](https://www.linkedin.com/in/ronak-singh-79234328a/)
+
+> **Disclaimer:** FinSight AI is an educational project. Nothing here is financial advice, and sentiment and AI analysis are automated estimates that can be wrong. Do your own research.
+
+Released under the [MIT License](LICENSE).

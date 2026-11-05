@@ -20,6 +20,7 @@ const LOOSE = { validateResult: false };
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const US_SYMBOLS = new Set(usStocks.map((s) => s.symbol));
+const TRACKED = new Set([...screenerStocks.map((s) => s.symbol), ...US_SYMBOLS]);
 
 // ── Cache with stale fallback ─────────────────────────────────
 // fresh for `ttl`, but kept for 24h so a Yahoo outage doesn't blank the app
@@ -238,6 +239,16 @@ const scoreSentiment = (text) => {
   };
 };
 
+// Which section a headline belongs in (drives the News page filter)
+const ECONOMY_RE = /\b(rbi|inflation|gdp|rupee|repo|interest rate|rate (cut|hike)|budget|fiscal|tariff|economy|economic|monetary|fed|trade deficit|forex)\b/i;
+const COMPANY_RE = /\b(earnings|results|quarter|q[1-4]|ipo|merger|acquisition|acquires|dividend|stake|order win|profit|revenue|shares of)\b/i;
+const classify = (title, summary, related) => {
+  const text = `${title} ${summary}`;
+  if (ECONOMY_RE.test(text)) return 'Economy';
+  if (related.length || COMPANY_RE.test(text)) return 'Companies';
+  return 'Markets';
+};
+
 const mapYahooNews = (article, category = 'business') => ({
   id: article.uuid || article.link,
   title: article.title || 'Untitled',
@@ -246,11 +257,10 @@ const mapYahooNews = (article, category = 'business') => ({
   url: article.link || '',
   time: toISO(article.providerPublishTime),
   category,
+  // Only tickers the app tracks, so the News page's stock filter never offers indices or junk symbols
   relatedStocks: (article.relatedTickers || [])
-    .filter((t) => !t.startsWith('^') && !t.includes('='))          // drop indices and commodities
     .map((t) => t.replace(/\.(NS|BO)$/, ''))
-    .filter((t) => !/^\d+$/.test(t))                                // drop bare BSE codes
-    .filter((t, i, all) => all.indexOf(t) === i)                    // NSE + BSE listings collapse to one ticker
+    .filter((t, i, all) => TRACKED.has(t) && all.indexOf(t) === i)   // NSE + BSE listings collapse to one
     .slice(0, 4),
 });
 
@@ -263,7 +273,7 @@ const getMarketNews = async () => {
 
   // Primary: Yahoo headlines about the Indian market (no key needed)
   // Yahoo's news search only matches short queries; long phrases return nothing
-  const queries = ['Sensex', 'Nifty 50', 'Indian stocks'];
+  const queries = ['Sensex', 'Nifty 50', 'Indian stocks', 'RBI', 'Indian economy', 'rupee', 'NSE India', 'India IPO'];
   const yahoo = await Promise.allSettled(
     queries.map((q) => yahooFinance.search(q, { newsCount: 15, quotesCount: 0 }, LOOSE))
   );
@@ -288,7 +298,7 @@ const getMarketNews = async () => {
           url: a.url,
           time: toISO(a.datetime),
           category: 'global',
-          relatedStocks: a.related ? a.related.split(',').slice(0, 4) : [],
+          relatedStocks: (a.related ? a.related.split(',') : []).filter((t) => TRACKED.has(t)).slice(0, 4),
         })
       );
     } catch (error) {
@@ -300,8 +310,8 @@ const getMarketNews = async () => {
   const data = collected
     .filter((a) => a.title && a.url && !seen.has(a.title.toLowerCase()) && seen.add(a.title.toLowerCase()))
     .sort((a, b) => new Date(b.time) - new Date(a.time))
-    .slice(0, 24)
-    .map((a) => ({ ...a, ...scoreSentiment(`${a.title} ${a.summary}`) }));
+    .slice(0, 40)
+    .map((a) => ({ ...a, category: a.category === 'global' ? 'Global' : classify(a.title, a.summary, a.relatedStocks), ...scoreSentiment(`${a.title} ${a.summary}`) }));
 
   if (data.length) {
     setCache(cacheKey, data, 600);
@@ -435,6 +445,7 @@ const searchSymbols = async (q) => {
 };
 
 module.exports = {
+  scoreSentiment,
   yahooFinance,
   LOOSE,
   toYahooSymbol,

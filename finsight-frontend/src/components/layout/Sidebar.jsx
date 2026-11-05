@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Building2, MessageSquareText, BriefcaseBusiness, Star, Newspaper, SlidersHorizontal, TrendingUp, GraduationCap, Zap, LogOut, Settings } from 'lucide-react';
+import { LayoutDashboard, Building2, MessageSquareText, BriefcaseBusiness, Star, Newspaper, SlidersHorizontal, TrendingUp, GraduationCap, Zap, LogOut, Settings, Scale } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../ui';
@@ -10,7 +10,8 @@ import { motion } from 'framer-motion';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/company/TCS', match: '/company', label: 'Company Analysis', icon: Building2 },
+  { path: '/company', match: '/company', label: 'Company Analysis', icon: Building2 },
+  { path: '/compare', label: 'Compare Stocks', icon: Scale },
   { path: '/chat', label: 'AI Chat', icon: MessageSquareText, badge: 'AI' },
   { path: '/portfolio', label: 'Portfolio', icon: BriefcaseBusiness },
   { path: '/watchlist', label: 'Watchlist', icon: Star },
@@ -54,7 +55,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
       >
         <div className="p-5 border-b border-bg-border flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center shadow-lg shadow-accent-primary/20">
-            <Zap size={18} className="text-bg-primary" fill="currentColor" />
+            <Zap size={18} className="text-white" fill="currentColor" />
           </div>
           <div>
             <p className="font-display font-bold text-text-primary text-lg leading-tight">FinSight</p>
@@ -104,7 +105,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
           </button>
 
           <div className="mt-2 pt-2 border-t border-bg-border flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center text-xs font-bold text-bg-primary shrink-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center text-xs font-bold text-white shrink-0">
               {initial}
             </div>
             <div className="flex-1 min-w-0">
@@ -126,7 +127,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
       <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Account" maxWidth="max-w-md">
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-lg bg-bg-tertiary p-4">
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center font-bold text-bg-primary">
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center font-bold text-white">
               {initial}
             </div>
             <div className="min-w-0">

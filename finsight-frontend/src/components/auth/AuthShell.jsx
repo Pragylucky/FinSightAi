@@ -108,6 +108,7 @@ export function AuthLayout({ children, title, subtitle, icon: Icon = Zap }) {
       <div className="app-bg" aria-hidden="true" />
       <div className="aurora aurora-a" aria-hidden="true" />
       <div className="aurora aurora-b" aria-hidden="true" />
+      <div className="aurora aurora-c" aria-hidden="true" />
 
       <div className="relative z-10 p-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors text-sm">
@@ -116,7 +117,7 @@ export function AuthLayout({ children, title, subtitle, icon: Icon = Zap }) {
         </Link>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center">
-            <Zap size={14} className="text-bg-primary" fill="currentColor" />
+            <Zap size={14} className="text-white" fill="currentColor" />
           </div>
           <span className="font-display font-bold text-text-primary">FinSight AI</span>
         </div>
@@ -132,7 +133,7 @@ export function AuthLayout({ children, title, subtitle, icon: Icon = Zap }) {
           <div className="bg-bg-secondary/90 backdrop-blur border border-bg-border rounded-2xl p-8 shadow-2xl shadow-black/40">
             <div className="text-center mb-8">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center mx-auto mb-4 shadow-lg shadow-accent-primary/20">
-                <Icon size={22} className="text-bg-primary" fill={Icon === Zap ? 'currentColor' : 'none'} />
+                <Icon size={22} className="text-white" fill={Icon === Zap ? 'currentColor' : 'none'} />
               </div>
               <h1 className="font-display font-bold text-2xl text-text-primary">{title}</h1>
               {subtitle && <p className="text-text-secondary text-sm mt-1">{subtitle}</p>}

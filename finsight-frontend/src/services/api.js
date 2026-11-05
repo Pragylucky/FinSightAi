@@ -157,6 +157,7 @@ const api = {
   // ── Market overview (indices, movers, ticker) ────────────────
   market: {
     overview: () => axiosInstance.get('/market/overview'),
+    pulse: () => axiosInstance.get('/market/pulse'), // public: used on the landing page
   },
 
   // ── Screener ─────────────────────────────────────────────────

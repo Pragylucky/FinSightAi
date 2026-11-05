@@ -1,5 +1,5 @@
 // controllers/screenerController.js
-// Stock screener over the ~100-stock universe. Data comes from the background snapshot in
+// Stock screener over the ~265-stock universe. Data comes from the background snapshot in
 // services/marketService.js, so this responds instantly.
 
 const { getSnapshot } = require('../services/marketService');
@@ -14,7 +14,7 @@ const toNum = (v, fallback) => {
 // Query: sector, search, peMin, peMax, roeMin, marketCapMin, divMin, debtEqMax, sortBy, sortDir, page, limit
 const screenStocks = async (req, res, next) => {
   try {
-    const { sector = 'all', search = '', sortBy = 'marketCap', sortDir = 'desc' } = req.query;
+    const { sector = 'all', cap = 'all', search = '', sortBy = 'marketCap', sortDir = 'desc' } = req.query;
     const peMin = toNum(req.query.peMin, null);
     const peMax = toNum(req.query.peMax, null);
     const roeMin = toNum(req.query.roeMin, null);
@@ -22,7 +22,7 @@ const screenStocks = async (req, res, next) => {
     const divMin = toNum(req.query.divMin, null);
     const debtEqMax = toNum(req.query.debtEqMax, null);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 150);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 300);
 
     const snapshot = await getSnapshot();
     let results = snapshot.stocks;
@@ -32,6 +32,7 @@ const screenStocks = async (req, res, next) => {
       results = results.filter((s) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
     }
     if (sector !== 'all') results = results.filter((s) => s.sector === sector);
+    if (cap !== 'all') results = results.filter((s) => s.capClass === cap);
 
     // A missing metric (null) never passes a filter on that metric
     results = results.filter((s) =>

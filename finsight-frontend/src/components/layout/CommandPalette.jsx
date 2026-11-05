@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, CornerDownLeft, LayoutDashboard, MessageSquareText, BriefcaseBusiness, Star, Newspaper, SlidersHorizontal, TrendingUp, GraduationCap, Building2 } from 'lucide-react';
+import { Search, CornerDownLeft, LayoutDashboard, MessageSquareText, BriefcaseBusiness, Star, Newspaper, SlidersHorizontal, TrendingUp, GraduationCap, Building2, Scale } from 'lucide-react';
 import { EASE } from '../../lib/motion';
 
 const PAGES = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+  { label: 'Company Analysis', to: '/company', icon: Building2 },
+  { label: 'Compare Stocks', to: '/compare', icon: Scale },
   { label: 'AI Chat', to: '/chat', icon: MessageSquareText },
   { label: 'Portfolio', to: '/portfolio', icon: BriefcaseBusiness },
   { label: 'Watchlist', to: '/watchlist', icon: Star },
@@ -30,7 +32,8 @@ export default function CommandPalette({ open, onClose }) {
     const symbol = q && /^[a-z0-9.&-]{1,15}$/i.test(q)
       ? [{ label: `Open ${q.toUpperCase()}`, hint: 'Company analysis', to: `/company/${encodeURIComponent(q.toUpperCase())}`, icon: Building2 }]
       : [];
-    return [...symbol, ...pages];
+    // A typed page name (compare, news...) should open that page; the symbol option leads only when no page matches
+    return pages.length ? [...pages, ...symbol] : symbol;
   }, [query]);
 
   useEffect(() => {

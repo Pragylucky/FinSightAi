@@ -50,8 +50,8 @@ const sendEmail = async ({ to, subject, html, text }) => {
 // ── Templates ────────────────────────────────────────────────
 
 const shell = (title, body) => `
-  <div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0D0C0B; color: #F6F1EA; padding: 32px; border-radius: 12px;">
-    <h1 style="color: #F5B544; font-size: 22px; margin: 0 0 8px;">FinSight AI</h1>
+  <div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0B0A14; color: #F4F2FF; padding: 32px; border-radius: 12px;">
+    <h1 style="color: #8B5CF6; font-size: 22px; margin: 0 0 8px;">FinSight AI</h1>
     <h2 style="font-size: 18px; margin: 0 0 16px;">${title}</h2>
     ${body}
   </div>`;
@@ -62,9 +62,9 @@ const sendVerificationCode = async (email, name, code) => {
     subject: `${code} is your FinSight AI verification code`,
     text: `Hi ${name}, your FinSight AI verification code is ${code}. It expires in 15 minutes. If you didn't sign up, ignore this email.`,
     html: shell('Verify your email', `
-      <p style="color: #A89F94; line-height: 1.6;">Hi ${escapeHtml(name)}, enter this code to activate your account:</p>
-      <p style="font-family: 'Courier New', monospace; font-size: 34px; letter-spacing: 10px; font-weight: 700; color: #F5B544; background: #161412; border: 1px solid #2C2824; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">${code}</p>
-      <p style="color: #6B645B; font-size: 12px;">The code expires in 15 minutes. If you didn't create an account, you can ignore this email.</p>`),
+      <p style="color: #A29FC0; line-height: 1.6;">Hi ${escapeHtml(name)}, enter this code to activate your account:</p>
+      <p style="font-family: 'Courier New', monospace; font-size: 34px; letter-spacing: 10px; font-weight: 700; color: #8B5CF6; background: #14121F; border: 1px solid #2A2742; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">${code}</p>
+      <p style="color: #6C6990; font-size: 12px;">The code expires in 15 minutes. If you didn't create an account, you can ignore this email.</p>`),
   });
 };
 
@@ -75,9 +75,9 @@ const sendPasswordResetEmail = async (email, name, token) => {
     subject: 'Reset your FinSight AI password',
     text: `Hi ${name}, reset your password here: ${resetUrl} (valid for 1 hour). If you didn't ask for this, ignore this email.`,
     html: shell('Reset your password', `
-      <p style="color: #A89F94; line-height: 1.6;">Hi ${escapeHtml(name)}, we received a request to reset your password.</p>
-      <a href="${resetUrl}" style="display: inline-block; background: #F5B544; color: #0D0C0B; font-weight: 700; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 20px 0;">Reset password</a>
-      <p style="color: #6B645B; font-size: 12px;">This link expires in 1 hour. If you didn't request it, your password won't change.</p>`),
+      <p style="color: #A29FC0; line-height: 1.6;">Hi ${escapeHtml(name)}, we received a request to reset your password.</p>
+      <a href="${resetUrl}" style="display: inline-block; background: #8B5CF6; color: #0B0A14; font-weight: 700; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 20px 0;">Reset password</a>
+      <p style="color: #6C6990; font-size: 12px;">This link expires in 1 hour. If you didn't request it, your password won't change.</p>`),
   });
 };
 
