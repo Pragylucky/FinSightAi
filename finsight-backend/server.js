@@ -53,6 +53,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'https://fin-sight-ai-six-kappa.vercel.app',
+  // Optional comma-separated extra origins, e.g. a Vercel preview URL while reviewing a branch
+  ...(process.env.EXTRA_ORIGINS || '').split(',').map((o) => o.trim().replace(/\/$/, '')),
 ].filter(Boolean);
 
 app.use(cors({

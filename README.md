@@ -160,6 +160,7 @@ Everything works without an email provider: with verification off (the default) 
 | `RESEND_API_KEY` or `EMAIL_HOST/PORT/USER/PASS` | backend, optional | Email for codes and password reset |
 | `FINNHUB_API_KEY` | backend, optional | Extra global headlines |
 | `NODE_ENV=production` | backend | Enables secure cross-site cookies |
+| `EXTRA_ORIGINS` | backend, optional | Extra comma-separated allowed origins, e.g. a Vercel preview URL |
 | `VITE_API_URL` | frontend | Backend base URL, ending in `/api` |
 
 See [`finsight-backend/.env.example`](finsight-backend/.env.example) for the full list.
