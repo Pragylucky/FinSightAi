@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { scoreSentiment, toYahooSymbol } = require('../services/financeService');
+const { scoreSentiment, toYahooSymbol, previousCloseOf } = require('../services/financeService');
 const { screenerStocks, symbolAliases } = require('../data/screenerData');
 const { findMentionedStocks } = require('../controllers/aiController');
 
@@ -56,4 +56,12 @@ test('findMentionedStocks: generic questions match nothing', () => {
 
 test('findMentionedStocks: never returns more than two stocks', () => {
   assert.ok(findMentionedStocks('TCS INFY WIPRO HCLTECH SBIN').length <= 2);
+});
+
+test('daily change uses yesterday\'s close, not the close before the 5-day window', () => {
+  // INFY-shaped response: chartPreviousClose (1185) is five sessions old
+  const result = { meta: { chartPreviousClose: 1185 }, indicators: { quote: [{ close: [1185, 1161, 1148.1, 1128.2, 1167.4] }] } };
+  assert.equal(previousCloseOf(result), 1128.2);
+  assert.equal(previousCloseOf({ meta: { previousClose: 100 }, indicators: { quote: [{ close: [1, 2] }] } }), 100);
+  assert.equal(previousCloseOf({ meta: {}, indicators: { quote: [{ close: [5] }] } }), null);
 });

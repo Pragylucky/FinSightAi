@@ -58,6 +58,16 @@ const toISO = (v) => {
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+// `chartPreviousClose` is the close before the whole 5-day window, not yesterday's, so using it
+// overstates (or reverses) the daily move. `previousClose` is often absent, so fall back to the
+// prior daily close in the series.
+const previousCloseOf = (result) => {
+  const meta = result?.meta || {};
+  if (typeof meta.previousClose === 'number') return meta.previousClose;
+  const closes = (result?.indicators?.quote?.[0]?.close || []).filter((v) => typeof v === 'number');
+  return closes.length >= 2 ? closes[closes.length - 2] : null;
+};
+
 // ── Crumb-free fallback ───────────────────────────────────────
 // yahoo-finance2's quote/quoteSummary need a session crumb, which Yahoo often refuses to cloud
 // hosts. The public chart endpoint needs none, so it backs up price, 52-week range and volume.
@@ -66,10 +76,11 @@ const chartMeta = async (yahooSymbol) => {
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`,
     { params: { interval: '1d', range: '5d' }, timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
   );
-  const meta = response.data?.chart?.result?.[0]?.meta;
+  const result = response.data?.chart?.result?.[0];
+  const meta = result?.meta;
   const price = meta?.regularMarketPrice;
   if (!meta || !(price > 0)) throw new Error('No price in chart response');
-  const prev = meta.previousClose ?? meta.chartPreviousClose;
+  const prev = previousCloseOf(result);
   return {
     name: meta.longName || meta.shortName || null,
     price,
@@ -96,13 +107,14 @@ const getStockQuote = async (symbol) => {
       { params: { interval: '1d', range: '5d' }, timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
 
-    const meta = response.data?.chart?.result?.[0]?.meta;
+    const result = response.data?.chart?.result?.[0];
+    const meta = result?.meta;
     if (!meta) throw new Error('No data returned from Yahoo Finance');
 
     const price = meta.regularMarketPrice ?? meta.chartPreviousClose;
     if (!price) throw new Error('No valid price returned');
 
-    const prevClose = meta.previousClose ?? meta.chartPreviousClose;
+    const prevClose = previousCloseOf(result);
     const change = prevClose ? price - prevClose : 0;
 
     const data = {
@@ -489,6 +501,7 @@ module.exports = {
   LOOSE,
   toYahooSymbol,
   chartMeta,
+  previousCloseOf,
   getStockQuote,
   getCompanyProfile,
   getHistoricalData,
