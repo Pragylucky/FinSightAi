@@ -181,7 +181,7 @@ export default function Chat() {
   const canSend = input.trim() && !loading;
 
   return (
-    <div className="flex flex-col w-full min-w-0 h-[calc(100vh-150px)] min-h-[420px]">
+    <div className="flex flex-col w-full min-w-0 h-[calc(100vh-270px)] md:h-[calc(100vh-250px)] min-h-[380px]">
       <div className="flex items-center justify-between mb-4 gap-3">
         <div>
           <h1 className="font-display font-bold text-xl text-text-primary">AI Chat Assistant</h1>

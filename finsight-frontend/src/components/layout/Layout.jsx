@@ -1,9 +1,10 @@
-// Layout.jsx — authenticated shell: top navigation + animated page outlet
+// Layout.jsx — authenticated shell: top bar + floating dock + animated page outlet
 
 import { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import TopNav from './TopNav';
+import Dock from './Dock';
 import CommandPalette from './CommandPalette';
 import { useAuth } from '../../context/AuthContext';
 import { PageTransition } from '../motion';
@@ -56,7 +57,7 @@ export default function Layout() {
       <div className="relative z-10 flex flex-col min-h-screen min-w-0">
         <TopNav onSearch={() => setPaletteOpen(true)} />
 
-        <main className="flex-1 min-w-0 w-full max-w-[88rem] mx-auto [overflow-x:clip] px-4 lg:px-8 py-6 lg:py-8">
+        <main className="flex-1 min-w-0 w-full max-w-[88rem] mx-auto [overflow-x:clip] px-4 lg:px-8 pt-6 pb-32 lg:pt-8">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Outlet />
@@ -64,6 +65,7 @@ export default function Layout() {
           </AnimatePresence>
         </main>
       </div>
+      <Dock />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
