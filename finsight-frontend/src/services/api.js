@@ -2,6 +2,9 @@ import axios from 'axios';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+// A sleeping free-tier server can take up to a minute to wake, so auth calls get a long timeout
+const AUTH = { timeout: 75000 };
+
 // Create axios instance with default config
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -99,15 +102,20 @@ axiosInstance.interceptors.response.use(
 );
 
 // ── API methods — grouped by feature ─────────────────────────
+// Fire-and-forget request that wakes a sleeping server while the visitor is still reading the page
+export const warmServer = () => {
+  axios.get(`${BASE_URL.replace(/\/api\/?$/, '')}/health`, { timeout: 90000 }).catch(() => {});
+};
+
 const api = {
 
   // ── Auth ────────────────────────────────────────────────────
   auth: {
-    register: (data) => axiosInstance.post('/auth/register', data),
-    login: (data) => axiosInstance.post('/auth/login', data),
-    guest: () => axiosInstance.post('/auth/guest'),
+    register: (data) => axiosInstance.post('/auth/register', data, AUTH),
+    login: (data) => axiosInstance.post('/auth/login', data, AUTH),
+    guest: () => axiosInstance.post('/auth/guest', undefined, AUTH),
     logout: () => axiosInstance.post('/auth/logout'),
-    getMe: () => axiosInstance.get('/auth/me'),
+    getMe: () => axiosInstance.get('/auth/me', AUTH),
     forgotPassword: (email) => axiosInstance.post('/auth/forgot-password', { email }),
     resetPassword: (token, password) => axiosInstance.post(`/auth/reset-password/${token}`, { password }),
     verifyCode: (email, code) => axiosInstance.post('/auth/verify-email', { email, code }),

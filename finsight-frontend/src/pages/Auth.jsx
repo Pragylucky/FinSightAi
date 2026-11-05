@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { AuthInput, AuthLayout, ErrorBanner, Spinner, GuestButton, OrDivider } from '../components/auth/AuthShell';
+import useSlow from '../lib/useSlow';
+import { AuthInput, AuthLayout, ErrorBanner, Spinner, GuestButton, OrDivider, WakeNotice } from '../components/auth/AuthShell';
 import { motion } from 'framer-motion';
 import { COLORS } from '../lib/theme';
 
@@ -15,6 +16,7 @@ export function Login() {
   const { login } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const slow = useSlow(loading);
   const [error, setError] = useState('');
 
   const justReset = location.state?.passwordReset;
@@ -73,6 +75,7 @@ export function Login() {
         <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 h-11">
           {loading ? <Spinner /> : 'Sign in'}
         </button>
+        <WakeNotice show={slow} />
 
         <OrDivider />
         <GuestButton onError={setError} className="w-full h-11 rounded-lg border border-bg-border bg-bg-tertiary text-sm text-text-secondary hover:text-text-primary hover:border-accent-primary/40 transition-colors" />
@@ -100,6 +103,7 @@ export function Signup() {
   const { register } = useAuth();
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
+  const slow = useSlow(loading);
   const navigate = useNavigate();
   const [error, setError] = useState('');
 
@@ -157,6 +161,7 @@ export function Signup() {
         <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 h-11">
           {loading ? <Spinner /> : 'Create account'}
         </button>
+        <WakeNotice show={slow} />
 
         <OrDivider />
         <GuestButton onError={setError} className="w-full h-11 rounded-lg border border-bg-border bg-bg-tertiary text-sm text-text-secondary hover:text-text-primary hover:border-accent-primary/40 transition-colors" />

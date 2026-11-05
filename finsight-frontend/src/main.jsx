@@ -5,6 +5,9 @@ import { MotionConfig } from 'framer-motion';
 import './index.css';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { warmServer } from './services/api';
+
+warmServer();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

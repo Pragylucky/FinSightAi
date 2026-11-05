@@ -19,10 +19,15 @@ export function AuthProvider({ children }) {
         try {
           const data = await api.auth.getMe();
           setUser(data.user);
-        } catch {
-          // Token invalid/expired — clear storage
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('user');
+        } catch (err) {
+          if (err.status === 401) {
+            // Token genuinely invalid/expired: clear storage
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('user');
+          } else {
+            // Server asleep or unreachable: don't sign people out for that. Use the saved profile.
+            try { setUser(JSON.parse(localStorage.getItem('user'))); } catch { /* no saved profile */ }
+          }
         }
       }
       setLoading(false);

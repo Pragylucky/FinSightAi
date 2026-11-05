@@ -1,5 +1,6 @@
 // Shared pieces for every logged-out account screen.
 
+import useSlow from '../../lib/useSlow';
 import { useId, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Zap, ArrowLeft, AlertCircle, UserRound } from 'lucide-react';
@@ -44,6 +45,20 @@ export function AuthInput({ label, type = 'text', value, onChange, placeholder, 
   );
 }
 
+// Shown when a sign-in call is taking unusually long
+export function WakeNotice({ show }) {
+  if (!show) return null;
+  return (
+    <motion.p
+      initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+      className="text-xs text-text-muted text-center leading-relaxed"
+      role="status"
+    >
+      Waking the server up. It runs on free hosting and sleeps when idle, so the first request can take up to a minute.
+    </motion.p>
+  );
+}
+
 export function ErrorBanner({ children }) {
   if (!children) return null;
   return (
@@ -64,6 +79,7 @@ export function GuestButton({ className = '', children = 'Continue as guest', on
   const { guest } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const slow = useSlow(busy);
 
   const go = async () => {
     setBusy(true);
@@ -77,15 +93,18 @@ export function GuestButton({ className = '', children = 'Continue as guest', on
   };
 
   return (
-    <button
-      type="button"
-      onClick={go}
-      disabled={busy}
-      className={`flex items-center justify-center gap-2 disabled:opacity-60 ${className}`}
-    >
-      {busy ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" /> : <UserRound size={16} />}
-      {children}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={go}
+        disabled={busy}
+        className={`flex items-center justify-center gap-2 disabled:opacity-60 ${className}`}
+      >
+        {busy ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" /> : <UserRound size={16} />}
+        {children}
+      </button>
+      <WakeNotice show={slow} />
+    </>
   );
 }
 
