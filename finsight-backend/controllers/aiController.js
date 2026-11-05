@@ -112,7 +112,8 @@ const chatWithAI = async (req, res, next) => {
       throw err;
     }
 
-    const { message, flags } = guardChatAnswer(result.message);
+    const grounded = Boolean(liveContext?.liveMarketData?.length);
+    const { message, flags } = guardChatAnswer(result.message, { grounded });
     const symbols = (liveContext?.liveMarketData || []).map((d) => d.symbol);
     record({
       user: req.user?._id, kind: 'chat', model: result.meta?.model, symbols, grounded: symbols.length > 0,

@@ -8,9 +8,15 @@ const { findMentionedStocks } = require('../controllers/aiController');
 const cases = require('../eval/mentionCases');
 
 // ── Guardrails ────────────────────────────────────────────────
-test('guard always appends the disclaimer when the model forgot it', () => {
-  const { message } = guardChatAnswer('TCS has a PE of 28.');
-  assert.ok(message.endsWith(DISCLAIMER));
+test('guard appends the disclaimer to investing answers the model left bare', () => {
+  assert.ok(guardChatAnswer('TCS shares trade at a PE of 28 and the stock pays a dividend.').message.endsWith(DISCLAIMER));
+  assert.ok(guardChatAnswer('Anything at all.', { grounded: true }).message.endsWith(DISCLAIMER));
+});
+
+test('guard leaves greetings and redirections without a disclaimer', () => {
+  const redirect = "I focus on finance and markets, so I can't help with that. Want to look at a stock or a concept instead?";
+  assert.equal(guardChatAnswer(redirect).message, redirect);
+  assert.equal(guardChatAnswer('Haha, fair enough! What would you like to explore?').message, 'Haha, fair enough! What would you like to explore?');
 });
 
 test('guard does not duplicate the disclaimer', () => {

@@ -11,11 +11,17 @@ const RULES = [
   { flag: 'price-target', test: /\b(will (reach|hit|touch)|target price (of|is))\s*₹?\s*\d/i },
 ];
 
-const guardChatAnswer = (text) => {
+// The disclaimer belongs on answers that discuss investing, not on greetings or redirections.
+const INVESTING = /\b(stocks?|shares?|equit(?:y|ies)|invest\w*|buy|sell|portfolio|mutual funds?|sip|etf|nifty|sensex|returns?|dividends?|valuation|overvalued|undervalued|p\/?e|roe|ebitda|market cap|nse|bse|ipo|bonds?|trading|trade)\b/gi;
+
+const guardChatAnswer = (text, { grounded = false } = {}) => {
   const flags = RULES.filter((r) => r.test.test(text)).map((r) => r.flag);
+  // Substantive investing talk = at least two distinct investing terms (a redirect that merely names "stocks" does not count)
+  const terms = new Set((text.match(INVESTING) || []).map((t) => t.toLowerCase()));
+  const needsDisclaimer = grounded || flags.length > 0 || terms.size >= 2;
   const hasDisclaimer = /not financial advice/i.test(text);
-  const message = hasDisclaimer ? text : `${text.trimEnd()}\n\n${DISCLAIMER}`;
-  return { message, flags };
+  const message = needsDisclaimer && !hasDisclaimer ? `${text.trimEnd()}\n\n${DISCLAIMER}` : text;
+  return { message, flags, disclaimed: needsDisclaimer };
 };
 
 module.exports = { guardChatAnswer, DISCLAIMER };
