@@ -49,6 +49,24 @@ const getCompany = async (req, res, next) => {
   }
 };
 
+// ── GET /api/companies/:symbol/snapshot ───────────────────────
+// Just the quote and key ratios (no news or quarterly results): ~3x faster, used by Compare.
+const getSnapshot = async (req, res, next) => {
+  try {
+    const symbol = cleanSymbol(req.params.symbol);
+    const [quote, profile] = await Promise.allSettled([getStockQuote(symbol), getCompanyProfile(symbol)]);
+    if (quote.status === 'rejected') {
+      return next(new AppError(
+        profile.status === 'fulfilled' && profile.value ? `Live price for ${symbol} is unavailable right now.` : `No data found for symbol: ${symbol}`,
+        profile.status === 'fulfilled' && profile.value ? 502 : 404
+      ));
+    }
+    res.json({ success: true, company: { symbol, ...(profile.status === 'fulfilled' ? profile.value : {}), quote: quote.value } });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ── GET /api/companies/:symbol/analysis ───────────────────────
 // AI summary, strengths, risks, outlook. Cached for 6 hours per symbol.
 const getAnalysis = async (req, res, next) => {
@@ -135,4 +153,4 @@ const searchCompanies = async (req, res, next) => {
   }
 };
 
-module.exports = { getCompany, getAnalysis, getQuote, getChartData, getCompanyNewsRoute, searchCompanies };
+module.exports = { getCompany, getSnapshot, getAnalysis, getQuote, getChartData, getCompanyNewsRoute, searchCompanies };

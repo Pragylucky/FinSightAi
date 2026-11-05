@@ -199,6 +199,7 @@ const getHistoricalData = async (symbol, days = 30) => {
 
     const data = timestamps
       .map((t, i) => ({
+        ts: t * 1000, // lets clients line up different markets by calendar date
         date: new Date(t * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
         price: quote.close?.[i],
         open: quote.open?.[i],

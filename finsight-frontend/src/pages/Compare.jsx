@@ -37,16 +37,26 @@ const METRICS = [
 
 const EXAMPLES = [['TCS', 'INFY'], ['HDFCBANK', 'ICICIBANK', 'SBIN'], ['RELIANCE', 'ONGC'], ['MARUTI', 'TMPV', 'M&M']];
 
-// Rebase every series to 0% at the start so different price levels are comparable
+// Line the series up by calendar date (Indian and US markets don't trade on the same days),
+// start every line at 0% on the first day they ALL have data, and carry the last price across holidays.
 function buildSeries(entries) {
-  const withChart = entries.filter((e) => e.chart?.length > 1);
+  const withChart = entries.filter((e) => e.chart?.length > 1 && e.chart[0].ts);
   if (!withChart.length) return [];
-  const n = Math.min(...withChart.map((e) => e.chart.length));
-  return Array.from({ length: n }, (_, i) => {
-    const row = { date: withChart[0].chart[withChart[0].chart.length - n + i].date };
-    withChart.forEach((e) => {
-      const slice = e.chart.slice(-n);
-      row[e.symbol] = Number((((slice[i].price / slice[0].price) - 1) * 100).toFixed(2));
+
+  const day = (ts) => new Date(ts).toISOString().slice(0, 10);
+  const start = Math.max(...withChart.map((e) => e.chart[0].ts));
+  const maps = withChart.map((e) => new Map(e.chart.filter((p) => p.ts >= start - 36e5).map((p) => [day(p.ts), p])));
+  const days = [...new Set(maps.flatMap((m) => [...m.keys()]))].sort();
+  if (days.length < 2) return [];
+
+  const base = withChart.map((_, i) => maps[i].get(days.find((d) => maps[i].has(d))).price);
+  const last = [...base];
+  return days.map((d) => {
+    const row = { date: maps.map((m) => m.get(d)?.date).find(Boolean) };
+    withChart.forEach((e, i) => {
+      const point = maps[i].get(d);
+      if (point) last[i] = point.price;
+      row[e.symbol] = Number((((last[i] / base[i]) - 1) * 100).toFixed(2));
     });
     return row;
   });
@@ -59,19 +69,20 @@ export default function Compare() {
   const key = symbols.join(',');
 
   const [loaded, setLoaded] = useState({}); // symbol -> { company, chart } | { error }
+  const [retry, setRetry] = useState(0);
 
   // Fetch whatever we don't have yet
   useEffect(() => {
     let cancelled = false;
     symbols.filter((s) => !loaded[s]).forEach((s) => {
-      Promise.all([api.company.get(s), api.company.getChart(s, 90)])
+      Promise.all([api.company.getSnapshot(s), api.company.getChart(s, 90)])
         .then(([c, ch]) => !cancelled && setLoaded((m) => ({ ...m, [s]: { company: c.company, chart: ch.data || [] } })))
         .catch((err) => !cancelled && setLoaded((m) => ({ ...m, [s]: { error: err.message } })));
     });
     return () => { cancelled = true; };
     // `loaded` is deliberately omitted: we only want to react to the symbol list changing
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, retry]);
 
   const setSymbols = (list) => setParams(list.length ? { s: list.join(',') } : {}, { replace: true });
   const add = (s) => { if (!symbols.includes(s) && symbols.length < MAX) setSymbols([...symbols, s]); };
@@ -167,7 +178,7 @@ export default function Compare() {
       )}
 
       {entries.filter((e) => e.error).map((e) => (
-        <Item key={e.symbol}><ErrorNotice message={`${e.symbol}: ${e.error}`} onRetry={() => { setLoaded((m) => { const n = { ...m }; delete n[e.symbol]; return n; }); setSymbols([...symbols]); }} /></Item>
+        <Item key={e.symbol}><ErrorNotice message={`${e.symbol}: ${e.error}`} onRetry={() => { setLoaded((m) => { const n = { ...m }; delete n[e.symbol]; return n; }); setRetry((n) => n + 1); }} /></Item>
       ))}
 
       {(ready.length > 0 || anyLoading) && (
@@ -254,6 +265,9 @@ export default function Compare() {
                     </tbody>
                   </table>
                 </div>
+                {new Set(ready.map((e) => e.c.currency || 'INR')).size > 1 && (
+                  <p className="text-xs text-accent-warn mt-4">These companies trade in different currencies. Compare percentage moves and ratios, not absolute prices or market caps.</p>
+                )}
                 <p className="text-xs text-text-muted mt-4">A trophy marks the best value in each row: higher is better for returns, ROE, margin and yield; lower is better for PE, PB and debt. A &quot;best&quot; is not a recommendation, so context matters (compare within the same sector). Educational only.</p>
               </Card>
             </Item>

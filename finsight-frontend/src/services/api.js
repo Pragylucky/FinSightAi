@@ -121,6 +121,7 @@ const api = {
     getQuote: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/quote`),
     getChart: (symbol, days = 30) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/chart`, { params: { days } }),
     getNews: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/news`),
+    getSnapshot: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/snapshot`),
     getAnalysis: (symbol) => axiosInstance.get(`/companies/${encodeURIComponent(symbol)}/analysis`, { timeout: 60000 }),
   },
 
