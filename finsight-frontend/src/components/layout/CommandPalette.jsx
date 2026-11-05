@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Search, CornerDownLeft, LayoutDashboard, MessageSquareText, BriefcaseBusiness, Star, Newspaper, SlidersHorizontal, TrendingUp, GraduationCap, Building2, Scale } from 'lucide-react';
 import { EASE } from '../../lib/motion';
+import api from '../../services/api';
 
 const PAGES = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
@@ -24,7 +25,22 @@ export default function CommandPalette({ open, onClose }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [companies, setCompanies] = useState([]);
   const input = useRef(null);
+
+  // Live company-name search, so typing "infosys" finds INFY
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return undefined;
+    let stale = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.company.search(q);
+        if (!stale) setCompanies((res.results || []).slice(0, 5));
+      } catch { if (!stale) setCompanies([]); }
+    }, 220);
+    return () => { stale = true; clearTimeout(t); };
+  }, [query]);
 
   const items = useMemo(() => {
     const q = query.trim();
@@ -32,9 +48,11 @@ export default function CommandPalette({ open, onClose }) {
     const symbol = q && /^[a-z0-9.&-]{1,15}$/i.test(q)
       ? [{ label: `Open ${q.toUpperCase()}`, hint: 'Company analysis', to: `/company/${encodeURIComponent(q.toUpperCase())}`, icon: Building2 }]
       : [];
-    // A typed page name (compare, news...) should open that page; the symbol option leads only when no page matches
-    return pages.length ? [...pages, ...symbol] : symbol;
-  }, [query]);
+    const found = (q.length >= 2 ? companies : []).map((c) => ({ label: c.symbol, hint: c.name, to: `/company/${encodeURIComponent(c.symbol)}`, icon: Building2 }));
+    // Typed page names (compare, news...) open that page first, then matching companies, then the raw symbol
+    const rest = found.length ? found : symbol;
+    return [...pages, ...rest];
+  }, [query, companies]);
 
   useEffect(() => {
     if (!open) return undefined;

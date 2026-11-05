@@ -17,9 +17,9 @@
 
 <sub>Tip: click **Try it as a guest** on the demo, no sign-up needed. The API runs on a free tier, so the first request after idle can take ~30 seconds.</sub>
 
-<img src="assets/screens/landing.png" alt="FinSight AI landing page" width="900" />
+<img src="assets/demo.gif" alt="FinSight AI walkthrough: landing, dashboard, command palette, company analysis, compare, screener, news and AI chat" width="900" />
 
-<sub>Violet dark theme · animated page transitions · command palette (⌘K)</sub>
+<sub>A 30-second tour recorded from the live app: guest login, ⌘K palette, company analysis, compare, screener, news, AI chat</sub>
 
 </div>
 
