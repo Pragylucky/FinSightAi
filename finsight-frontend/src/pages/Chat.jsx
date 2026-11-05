@@ -7,9 +7,14 @@ import { chatSuggestions } from '../data/mockData';
 import api from '../services/api';
 import { motion } from 'framer-motion';
 import { EASE } from '../lib/motion';
+import track from '../lib/track';
+import Feedback from '../components/common/Feedback';
+import { Database } from 'lucide-react';
 
 const WELCOME = "Hi, I'm FinSight AI.\n\nI can help you:\n• Analyse a stock or company\n• Explain terms like PE ratio, EBITDA or ROE\n• Compare funds or stocks\n• Make sense of market news\n\nWhat would you like to know?";
 const now = () => Date.now();
+let seq = 0;
+const newId = () => `m${Date.now().toString(36)}${(seq += 1)}`;
 
 // ── Safe mini-markdown renderer (no innerHTML) ───────────────────────────────
 function inline(text) {
@@ -87,6 +92,13 @@ function Message({ msg }) {
           {isAI ? <Markdown text={msg.content} /> : <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap break-words">{msg.content}</p>}
         </div>
 
+        {msg.sources && (
+          <p className="flex items-center gap-1.5 mt-1.5 mx-1 text-xs text-text-muted">
+            <Database size={11} className="text-accent-green" />
+            Grounded in live data: <span className="text-text-secondary">{msg.sources.symbols.join(', ')}</span>
+            · as of {new Date(msg.sources.asOf).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
         <div className="flex items-center gap-2 mt-1.5 mx-1 text-xs text-text-muted">
           <span>{new Date(msg.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
           {isAI && (
@@ -95,6 +107,7 @@ function Message({ msg }) {
               {copied && <span className="text-accent-green">Copied</span>}
             </button>
           )}
+          {msg.id && <Feedback kind="chat" refId={msg.id} />}
         </div>
       </div>
     </motion.div>
@@ -143,12 +156,13 @@ export default function Chat() {
     setMessages(history);
     setInput('');
     setLoading(true);
+    track('chat_message');
 
     try {
       // The welcome message is UI-only; don't send it to the model as history.
       const payload = history.slice(1).map(({ role, content: c }) => ({ role, content: c }));
       const data = await api.ai.chat(payload);
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.message, at: now() }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.message, sources: data.sources || null, id: newId(), at: now() }]);
     } catch (err) {
       setMessages((prev) => [...prev, { role: 'assistant', content: `I couldn't answer that: ${err.message}`, at: now() }]);
     } finally {

@@ -26,6 +26,7 @@ const newsRoutes = require('./routes/news');
 const screenerRoutes = require('./routes/screener');
 const userRoutes = require('./routes/user');
 const marketRoutes = require('./routes/market');
+const eventRoutes = require('./routes/events');
 const { start: startMarketData } = require('./services/marketService');
 
 // ── Create Express app ───────────────────────────────────────
@@ -111,6 +112,7 @@ app.use('/api/news', newsRoutes);
 app.use('/api/screener', screenerRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/market', marketRoutes);
+app.use('/api/events', eventRoutes);
 app.use(
   '/api/mutual-funds',
   require('./routes/mutualFundRoutes')

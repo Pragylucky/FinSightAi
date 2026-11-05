@@ -9,6 +9,7 @@ import { Card, SectionHeader, EmptyState, ErrorNotice } from '../components/ui';
 import StockSearch from '../components/common/StockSearch';
 import { Stagger, Item } from '../components/motion';
 import { CHART_PALETTE, COLORS } from '../lib/theme';
+import track from '../lib/track';
 import api from '../services/api';
 
 const MAX = 4;
@@ -79,6 +80,7 @@ export default function Compare() {
         .then(([c, ch]) => !cancelled && setLoaded((m) => ({ ...m, [s]: { company: c.company, chart: ch.data || [] } })))
         .catch((err) => !cancelled && setLoaded((m) => ({ ...m, [s]: { error: err.message } })));
     });
+    if (symbols.length >= 2) track('compare_used');
     return () => { cancelled = true; };
     // `loaded` is deliberately omitted: we only want to react to the symbol list changing
     // eslint-disable-next-line react-hooks/exhaustive-deps

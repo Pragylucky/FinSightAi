@@ -5,6 +5,9 @@ const {
   generateCompanySummary,
 } = require('../services/aiService');
 const { getStockQuote, getCompanyProfile } = require('../services/financeService');
+const { guardChatAnswer } = require('../services/aiGuard');
+const AiEvent = require('../models/AiEvent');
+const AiFeedback = require('../models/AiFeedback');
 const { screenerStocks, usStocks, symbolAliases } = require('../data/screenerData');
 
 // Finds stocks mentioned in a chat message ("Is TCS overvalued?", "compare infosys and wipro")
@@ -62,6 +65,9 @@ const buildChatContext = async (text) => {
 };
 
 
+// Telemetry must never break a user request
+const record = (event) => { AiEvent.create(event).catch(() => {}); };
+
 const chatWithAI = async (req, res, next) => {
   try {
     const { messages, context = null } = req.body;
@@ -98,14 +104,27 @@ const chatWithAI = async (req, res, next) => {
     const lastUser = [...validMessages].reverse().find((m) => m.role === 'user');
     const liveContext = context || (lastUser ? await buildChatContext(lastUser.content).catch(() => null) : null);
 
-    const result = await generateAIResponse(
-      validMessages,
-      liveContext
-    );
+    let result;
+    try {
+      result = await generateAIResponse(validMessages, liveContext);
+    } catch (err) {
+      record({ user: req.user?._id, kind: 'chat', ok: false, error: String(err.message).slice(0, 200), grounded: !!liveContext });
+      throw err;
+    }
+
+    const { message, flags } = guardChatAnswer(result.message);
+    const symbols = (liveContext?.liveMarketData || []).map((d) => d.symbol);
+    record({
+      user: req.user?._id, kind: 'chat', model: result.meta?.model, symbols, grounded: symbols.length > 0,
+      latencyMs: result.meta?.latencyMs, inputTokens: result.meta?.inputTokens, outputTokens: result.meta?.outputTokens,
+      guardFlags: flags,
+    });
 
     res.json({
       success: true,
-      message: result.message,
+      message,
+      // What the answer was grounded in, so the UI can show it instead of asking users to trust it
+      sources: symbols.length ? { symbols, asOf: liveContext.asOf } : null,
     });
   } catch (error) {
     console.error(
@@ -131,8 +150,7 @@ const analyzeCompany = async (req, res, next) => {
       });
     }
 
-    const analysis =
-      await generateCompanySummary(companyData);
+    const { _meta, ...analysis } = await generateCompanySummary(companyData);
 
     res.json({
       success: true,
@@ -148,7 +166,69 @@ const analyzeCompany = async (req, res, next) => {
   }
 };
 
+// ── POST /api/ai/feedback ─────────────────────────────────────
+// Body: { kind: 'chat'|'analysis', ref, rating: 1|-1, reason? }
+const submitFeedback = async (req, res, next) => {
+  try {
+    const { kind, ref, rating, reason = null } = req.body || {};
+    if (!['chat', 'analysis'].includes(kind) || typeof ref !== 'string' || !ref.trim() || ![1, -1].includes(rating)) {
+      return res.status(400).json({ success: false, message: 'kind, ref and rating (1 or -1) are required' });
+    }
+    await AiFeedback.findOneAndUpdate(
+      { user: req.user._id, kind, ref: ref.slice(0, 80) },
+      { rating, reason: rating === -1 ? reason : null, createdAt: new Date() },
+      { upsert: true, runValidators: true }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── GET /api/ai/stats?days=30 ─────────────────────────────────
+// Aggregate quality/cost numbers for the AI features (the dashboard a PM would watch).
+const percentile = (sorted, p) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null);
+
+const getAiStats = async (req, res, next) => {
+  try {
+    const days = Math.min(90, Math.max(1, Number(req.query.days) || 30));
+    const since = new Date(Date.now() - days * 864e5);
+    const [events, feedback] = await Promise.all([
+      AiEvent.find({ createdAt: { $gte: since } }).select('kind ok grounded cached latencyMs inputTokens outputTokens guardFlags').lean(),
+      AiFeedback.find({ createdAt: { $gte: since } }).select('kind rating reason').lean(),
+    ]);
+
+    const byKind = (kind) => {
+      const rows = events.filter((e) => e.kind === kind);
+      const live = rows.filter((e) => e.ok && !e.cached);
+      const lat = live.map((e) => e.latencyMs).filter(Number.isFinite).sort((a, b) => a - b);
+      const votes = feedback.filter((f) => f.kind === kind);
+      const up = votes.filter((f) => f.rating === 1).length;
+      const sum = (key) => live.reduce((a, e) => a + (e[key] || 0), 0);
+      return {
+        requests: rows.length,
+        errorRate: rows.length ? +(rows.filter((e) => !e.ok).length / rows.length).toFixed(3) : null,
+        cacheHitRate: rows.length ? +(rows.filter((e) => e.cached).length / rows.length).toFixed(3) : null,
+        groundedRate: rows.length ? +(rows.filter((e) => e.grounded).length / rows.length).toFixed(3) : null,
+        latencyMs: { p50: percentile(lat, 0.5), p95: percentile(lat, 0.95) },
+        avgTokens: live.length ? { input: Math.round(sum('inputTokens') / live.length), output: Math.round(sum('outputTokens') / live.length) } : null,
+        guardrailFlags: rows.reduce((a, e) => a + (e.guardFlags?.length || 0), 0),
+        feedback: { votes: votes.length, helpfulRate: votes.length ? +(up / votes.length).toFixed(3) : null },
+      };
+    };
+
+    const reasons = {};
+    feedback.filter((f) => f.rating === -1 && f.reason).forEach((f) => { reasons[f.reason] = (reasons[f.reason] || 0) + 1; });
+
+    res.json({ success: true, windowDays: days, chat: byKind('chat'), analysis: byKind('analysis'), downvoteReasons: reasons });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
+  submitFeedback,
+  getAiStats,
   findMentionedStocks,
   chatWithAI,
   analyzeCompany,

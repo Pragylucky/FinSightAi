@@ -60,6 +60,24 @@
 
 ---
 
+## Product thinking
+
+This was built like a product, not just a codebase.
+
+| | |
+|---|---|
+| **[Product brief](docs/PRODUCT.md)** | Problem, target user, positioning against existing tools, RICE prioritisation (including what I chose *not* to build), success metrics, risks, roadmap |
+| **[AI evaluation](docs/EVAL.md)** | Labelled test sets for grounding, faithfulness, honesty and safety. Runs in CI; stock-mention detection scores 93% precision / 93% recall |
+| **[User testing plan](docs/USER_TESTING.md)** | Task script and recording template for validating the assumptions in the brief |
+
+**AI quality loop, built into the app:**
+- **Transparent:** the analysis shows exactly which figures the model was given ("What is this based on?"); chat shows which live data grounded the answer and when.
+- **Measured:** 👍/👎 with a reason on every analysis and chat answer, plus latency, token cost, error rate and guardrail flags per call, via `GET /api/ai/stats`.
+- **Guarded:** the disclaimer is added server-side and risky phrasing (guaranteed returns, hard buy/sell calls, price targets) is flagged, so safety doesn't depend on the prompt.
+- **Funnel analytics:** guest → company page → AI analysis, via `GET /api/events/funnel`.
+
+---
+
 ## Engineering highlights
 
 These are the problems that were interesting to solve, not just features that were wired up.
@@ -149,7 +167,8 @@ See [`finsight-backend/.env.example`](finsight-backend/.env.example) for the ful
 ### Tests
 
 ```bash
-cd finsight-backend  && npm test
+cd finsight-backend  && npm test         # unit tests + AI grounding eval
+cd finsight-backend  && npm run eval     # live-model eval (needs GEMINI_API_KEY)
 cd finsight-frontend && npm run lint && npm test && npm run build
 ```
 
@@ -166,7 +185,9 @@ All routes are under `/api`. Everything except auth and `GET /market/pulse` requ
 | Companies | `GET /companies/search?q=` · `/:symbol` · `/:symbol/analysis` · `/:symbol/chart?days=` · `/:symbol/quote` · `/:symbol/news` |
 | Screener | `GET /screener` (sector, cap, PE/ROE filters, sort, paging) · `/screener/sectors` |
 | Portfolio / watchlist | `GET/POST /portfolio`, `/portfolio/holdings` · `GET/POST/PUT/DELETE /watchlist` |
-| News · Funds · AI | `GET /news` · `GET /mutual-funds` · `POST /ai/chat` |
+| News · Funds | `GET /news` · `GET /mutual-funds` |
+| AI | `POST /ai/chat` · `POST /ai/feedback` · `GET /ai/stats` |
+| Analytics | `POST /events` · `GET /events/funnel` |
 
 ---
 

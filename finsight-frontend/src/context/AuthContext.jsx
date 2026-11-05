@@ -2,6 +2,7 @@
 // Any component can call useAuth() to get user info / login / logout.
 
 import { createContext, useContext, useState, useEffect } from 'react';
+import track from '../lib/track';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
@@ -40,13 +41,17 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => startSession(await api.auth.login({ email, password }));
 
   // One-click throwaway account for demos
-  const guest = async () => startSession(await api.auth.guest());
+  const guest = async () => {
+    const data = await startSession(await api.auth.guest());
+    track('guest_started');
+    return data;
+  };
 
   // Resolves with the server response. If the server returned a session (verification
   // switched off) the user is signed in; otherwise they still need to verify their email.
   const register = async (name, email, password) => {
     const data = await api.auth.register({ name, email, password });
-    if (data.accessToken) startSession(data);
+    if (data.accessToken) { startSession(data); track('signup'); }
     return data;
   };
 

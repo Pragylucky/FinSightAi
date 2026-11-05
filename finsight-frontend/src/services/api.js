@@ -167,9 +167,17 @@ const api = {
     getSectors: () => axiosInstance.get('/screener/sectors'),
   },
 
+  // ── Product analytics ───────────────────────────────────────
+  events: {
+    track: (name, session) => axiosInstance.post('/events', { name, session }),
+    funnel: (days = 30) => axiosInstance.get('/events/funnel', { params: { days } }),
+  },
+
   // ── AI ───────────────────────────────────────────────────────
   ai: {
     chat: (messages) => axiosInstance.post('/ai/chat', { messages }, { timeout: 60000 }),
+    feedback: (body) => axiosInstance.post('/ai/feedback', body),
+    stats: (days = 30) => axiosInstance.get('/ai/stats', { params: { days } }),
   },
 
   // ── MUTUAL FUNDS ─────────────────────────────────────────────────────

@@ -1,0 +1,26 @@
+// Labelled set for stock-mention detection: which tickers should the chat ground its answer in?
+// `expect` is the exact set of symbols; [] means "no stock mentioned, do not fetch anything".
+module.exports = [
+  { q: 'Is TCS overvalued right now?', expect: ['TCS'] },
+  { q: 'compare infosys and wipro', expect: ['INFY', 'WIPRO'] },
+  { q: 'What is the PE ratio of Reliance Industries?', expect: ['RELIANCE'] },
+  { q: 'Should I buy HDFC Bank or ICICI Bank?', expect: ['HDFCBANK', 'ICICIBANK'] },
+  { q: 'how is zomato doing', expect: ['ETERNAL'] },
+  { q: 'Tell me about Tata Motors', expect: ['TMPV'] },
+  { q: 'Is SBIN a good dividend stock?', expect: ['SBIN'] },
+  { q: 'What happened to Adani Enterprises today?', expect: ['ADANIENT'] },
+  { q: 'Bajaj Finance vs Bajaj Finserv', expect: ['BAJFINANCE', 'BAJAJFINSV'] },
+  { q: 'Is ITC a safe long term hold?', expect: ['ITC'] },
+  { q: 'How is Apple stock performing?', expect: ['AAPL'] },
+  { q: 'Is Tesla overvalued?', expect: ['TSLA'] },
+  { q: 'Explain what EBITDA means', expect: [] },
+  { q: 'What is a good ROE for a bank?', expect: [] },
+  { q: 'How does a SIP work?', expect: [] },
+  { q: 'Is it a good time to invest in the stock market?', expect: [] },
+  { q: 'What is the difference between PE and PB ratio?', expect: [] },
+  { q: 'Explain debt to equity in simple words', expect: [] },
+  { q: 'how do I diversify my portfolio', expect: [] },
+  { q: 'What does an IT sector slowdown mean for investors?', expect: [] },
+  { q: 'Tell me about the market today', expect: [] },
+  { q: 'Is LT a good infrastructure play?', expect: [] },
+];

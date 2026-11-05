@@ -61,6 +61,7 @@ const callGemini = async (
   }
 
   const MAX_RETRIES = 2;
+  const startedAt = Date.now();
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -114,7 +115,14 @@ const callGemini = async (
         throw new Error('Gemini returned an empty response');
       }
 
-      return text;
+      const usage = response.data?.usageMetadata || {};
+      return {
+        text,
+        model: GEMINI_MODEL,
+        latencyMs: Date.now() - startedAt,
+        inputTokens: usage.promptTokenCount ?? null,
+        outputTokens: usage.candidatesTokenCount ?? null,
+      };
 
     } catch (error) {
       const status = error.response?.status;
@@ -209,16 +217,13 @@ ${conversation}
 Respond to the user's latest message as FinSight AI.
 `;
 
-  const message = await callGemini(prompt, {
+  const call = await callGemini(prompt, {
     systemPrompt: SYSTEM_PROMPT,
     temperature: 0.5,
     maxOutputTokens: 1500,
   });
 
-  return {
-    message,
-    tokensUsed: null,
-  };
+  return { message: call.text, meta: call };
 };
 
 // Pulls the first JSON object out of a model reply, even if it is wrapped in markdown or chatter
@@ -262,14 +267,14 @@ The outlook must be one of:
 Do not wrap the response in markdown.
 `;
 
-  const text = await callGemini(prompt, {
+  const call = await callGemini(prompt, {
     systemPrompt:
       'You are a financial analyst. Analyze only the supplied data. Return only valid JSON with no markdown or additional commentary.',
     temperature: 0.2,
     maxOutputTokens: 1000,
   });
 
-  const analysis = parseJsonObject(text);
+  const analysis = parseJsonObject(call.text);
   const outlooks = ['Positive', 'Neutral', 'Negative'];
 
   // Don't pass a made-up "Neutral / 50" analysis off as real: fail so the UI can offer a retry
@@ -278,6 +283,7 @@ Do not wrap the response in markdown.
   }
 
   return {
+    _meta: call,
     summary: analysis.summary.trim(),
     pros: (Array.isArray(analysis.pros) ? analysis.pros : []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 5),
     cons: (Array.isArray(analysis.cons) ? analysis.cons : []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 5),
@@ -318,19 +324,20 @@ Rules:
 - Do not invent affected stocks if none can be identified
 `;
 
-  const text = await callGemini(prompt, {
+  const call = await callGemini(prompt, {
     systemPrompt:
       'You are a financial news analyst. Return only valid JSON with no markdown or additional commentary.',
     temperature: 0.2,
     maxOutputTokens: 500,
   });
 
-  const parsed = parseJsonObject(text);
+  const parsed = parseJsonObject(call.text);
   if (!parsed) throw new Error('The AI returned an unreadable summary. Please try again.');
   return parsed;
 };
 
 module.exports = {
+  parseJsonObject,
   generateAIResponse,
   generateCompanySummary,
   summarizeNews,

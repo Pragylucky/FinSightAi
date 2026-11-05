@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowUp, ArrowDown, SlidersHorizontal, Loader2, RotateCcw } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, SlidersHorizontal, Loader2, RotateCcw, Bookmark, X } from 'lucide-react';
 import { Card, SectionHeader, EmptyState, ErrorNotice, LoadingSkeleton, Chips } from '../components/ui';
 import { motion } from 'framer-motion';
 import useApi from '../lib/useApi';
+import track from '../lib/track';
 import api from '../services/api';
 
 const fetchStocks = () => api.screener.get({ limit: 300 });
@@ -24,6 +25,17 @@ const COLUMNS = [
   { col: 'revenueGrowth', label: 'Rev growth' },
 ];
 
+// Ready-made screens (the "why" is shown on hover) plus any the user saves in this browser
+const PRESETS = [
+  { id: 'quality', label: 'Quality compounders', hint: 'ROE above 20% at a PE under 40', patch: { roeMin: 20, peMax: 40 } },
+  { id: 'value', label: 'Value picks', hint: 'PE under 15', patch: { peMax: 15 } },
+  { id: 'largecap', label: 'Blue chips', hint: 'Large caps with ROE above 15%', patch: { cap: 'Large', roeMin: 15 } },
+  { id: 'smallgems', label: 'Small-cap quality', hint: 'Small caps with ROE above 15% and PE under 30', patch: { cap: 'Small', roeMin: 15, peMax: 30 } },
+];
+const SAVED_KEY = 'finsight.savedScreens';
+const loadSaved = () => { try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch { return []; } };
+const storeSaved = (list) => { try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch { /* storage unavailable */ } };
+
 const dash = <span className="text-text-muted">—</span>;
 const fmt = (v, d = 1) => (v == null ? dash : v.toFixed(d));
 // marketCap arrives in ₹ crore
@@ -37,6 +49,7 @@ export default function Screener() {
   const [sortDir, setSortDir] = useState('desc');
   const [filters, setFilters] = useState(DEFAULTS);
   const [visible, setVisible] = useState(PAGE);
+  const [saved, setSaved] = useState(loadSaved);
 
   // ROE / D/E / growth load in the background on the server; keep polling until they're all in
   const stillLoading = Boolean(data?.loadingFundamentals);
@@ -72,6 +85,15 @@ export default function Screener() {
   };
 
   const setFilter = (patch) => { setFilters((f) => ({ ...f, ...patch })); setVisible(PAGE); };
+  const applyPreset = (patch) => {
+    track('screen_applied'); setFilters({ ...DEFAULTS, ...patch }); setSearch(''); setVisible(PAGE); };
+  const saveCurrent = () => {
+    const name = window.prompt('Name this screen', 'My screen');
+    if (!name?.trim()) return;
+    const next = [...saved.filter((x) => x.name !== name.trim()), { name: name.trim().slice(0, 30), filters }].slice(-8);
+    setSaved(next); storeSaved(next);
+  };
+  const removeSaved = (name) => { const next = saved.filter((x) => x.name !== name); setSaved(next); storeSaved(next); };
   const dirty = filtering || filters.sector !== 'all' || filters.cap !== 'all' || search;
 
   return (
@@ -79,6 +101,21 @@ export default function Screener() {
       <SectionHeader title="Stock screener" subtitle="Live prices and fundamentals across ~265 NSE companies: large, mid and small caps" />
 
       <Card>
+        <div className="flex items-center gap-2 mb-4 flex-wrap" role="group" aria-label="Quick screens">
+          <span className="text-xs text-text-muted mr-1">Quick screens</span>
+          {PRESETS.map((p) => (
+            <button key={p.id} onClick={() => applyPreset(p.patch)} title={p.hint} className="px-3 py-1 rounded-full text-xs border border-bg-border text-text-secondary hover:border-accent-primary/50 hover:text-text-primary transition-colors">{p.label}</button>
+          ))}
+          {saved.map((x) => (
+            <span key={x.name} className="inline-flex items-center rounded-full text-xs border border-accent-primary/30 bg-accent-primary/5 text-accent-primary">
+              <button onClick={() => applyPreset(x.filters)} className="pl-3 pr-1.5 py-1">{x.name}</button>
+              <button onClick={() => removeSaved(x.name)} aria-label={`Delete ${x.name}`} className="pr-2 py-1 opacity-60 hover:opacity-100"><X size={11} /></button>
+            </span>
+          ))}
+          {filtering || filters.cap !== 'all' || filters.sector !== 'all' ? (
+            <button onClick={saveCurrent} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary ml-auto"><Bookmark size={12} /> Save this screen</button>
+          ) : null}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label htmlFor="scr-search" className="text-xs text-text-muted mb-1 block">Search</label>

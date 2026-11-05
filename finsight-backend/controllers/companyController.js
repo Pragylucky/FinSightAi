@@ -5,6 +5,7 @@
 const {
   getStockQuote, getCompanyProfile, getHistoricalData, getCompanyNews, getQuarterlyFinancials, searchSymbols,
 } = require('../services/financeService');
+const AiEvent = require('../models/AiEvent');
 const { generateCompanySummary } = require('../services/aiService');
 const { AppError } = require('../middleware/errorHandler');
 
@@ -75,6 +76,7 @@ const getAnalysis = async (req, res, next) => {
 
     const hit = analysisCache.get(symbol);
     if (hit && Date.now() - hit.at < ANALYSIS_TTL_MS) {
+      AiEvent.create({ user: req.user?._id, kind: 'analysis', symbols: [symbol], grounded: true, cached: true }).catch(() => {});
       return res.json({ success: true, analysis: hit.data, cached: true });
     }
 
@@ -107,7 +109,20 @@ const getAnalysis = async (req, res, next) => {
       week52Low: profile.week52Low,
     }).filter(([, v]) => v != null && v !== 'Unknown'));
 
-    const data = await generateCompanySummary(facts);
+    let generated;
+    try {
+      generated = await generateCompanySummary(facts);
+    } catch (err) {
+      AiEvent.create({ user: req.user?._id, kind: 'analysis', symbols: [symbol], grounded: true, ok: false, error: String(err.message).slice(0, 200) }).catch(() => {});
+      throw err;
+    }
+    const { _meta, ...fields } = generated;
+    AiEvent.create({
+      user: req.user?._id, kind: 'analysis', symbols: [symbol], grounded: true, model: _meta?.model,
+      latencyMs: _meta?.latencyMs, inputTokens: _meta?.inputTokens, outputTokens: _meta?.outputTokens,
+    }).catch(() => {});
+    // `inputs` lists exactly what the model was shown, so the UI can display it
+    const data = { ...fields, inputs: facts, model: _meta?.model, generatedAt: new Date().toISOString() };
     analysisCache.set(symbol, { at: Date.now(), data });
     res.json({ success: true, analysis: data });
   } catch (error) {
