@@ -52,6 +52,10 @@
     <td><img src="assets/screens/news.png" alt="News with filters" /></td>
     <td><img src="assets/screens/company-hub.png" alt="Company analysis hub" /></td>
   </tr>
+  <tr>
+    <td><img src="assets/screens/ai-chat.png" alt="AI chat assistant" /></td>
+    <td><img src="assets/screens/landing.png" alt="Landing page" /></td>
+  </tr>
 </table>
 
 ---
