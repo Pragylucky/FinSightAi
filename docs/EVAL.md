@@ -50,6 +50,6 @@ Paste the table here with the date and model name. The point of keeping this fil
 
 ## Limits of this evaluation
 
-- 22 detection questions and 15 live cases are small. They catch regressions; they don't prove general accuracy.
+- 22 detection questions and 20 live cases are small. They catch regressions; they don't prove general accuracy.
 - Faithfulness checks that the quoted *number* matches; it doesn't judge whether the interpretation is sound. That needs human review, which is what 👎 → "wrong numbers" and the user sessions in [USER_TESTING.md](USER_TESTING.md) are for.
 - The eval uses one model and one prompt version.

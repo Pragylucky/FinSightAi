@@ -1,25 +1,40 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="FinSight AI" width="100%" />
+<img src="assets/banner.svg" alt="FinSight AI: live NSE data, AI company analysis, compare, screener and portfolio" width="100%" />
 
-<a href="https://fin-sight-ai-six-kappa.vercel.app"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=700&lines=Live+prices+for+265+NSE+stocks;AI-written+company+analysis+(Gemini);Compare+up+to+4+stocks+side+by+side;Screener%2C+portfolio%2C+watchlist+%26+news;Try+it+as+a+guest+%E2%80%94+no+sign-up" alt="Typing animation of features" /></a>
+<a href="https://fin-sight-ai-six-kappa.vercel.app"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=760&lines=Live+prices+for+265+NSE+stocks;AI+analysis+that+shows+exactly+what+it+was+given;Compare%2C+screen%2C+track+a+portfolio+in+%E2%82%B9+and+%24;Guardrails%2C+evals+and+feedback+built+in;Try+it+as+a+guest+%E2%80%94+no+sign-up" alt="Typing animation of features" /></a>
 
 [![CI](https://github.com/Pragylucky/FinSightAi/actions/workflows/ci.yml/badge.svg)](https://github.com/Pragylucky/FinSightAi/actions/workflows/ci.yml)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white&style=flat-square)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white&style=flat-square)
+![Framer Motion](https://img.shields.io/badge/Framer_Motion-animations-FF0055?logo=framer&logoColor=white&style=flat-square)
 ![Node](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white&style=flat-square)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white&style=flat-square)
 ![Gemini](https://img.shields.io/badge/AI-Gemini-8E75B2?logo=googlegemini&logoColor=white&style=flat-square)
 ![Tailwind](https://img.shields.io/badge/Tailwind-3-06B6D4?logo=tailwindcss&logoColor=white&style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
-### [**Live demo**](https://fin-sight-ai-six-kappa.vercel.app) &nbsp;·&nbsp; [API health](https://finsight-backend-jlvd.onrender.com/health) &nbsp;·&nbsp; [Report a bug](https://github.com/Pragylucky/FinSightAi/issues)
+### [**Live demo**](https://fin-sight-ai-six-kappa.vercel.app) &nbsp;·&nbsp; [Product brief](docs/PRODUCT.md) &nbsp;·&nbsp; [AI evaluation](docs/EVAL.md) &nbsp;·&nbsp; [API health](https://finsight-backend-jlvd.onrender.com/health)
 
-<sub>Tip: click **Try it as a guest** on the demo, no sign-up needed. The API runs on a free tier, so the first request after idle can take ~30 seconds.</sub>
+<sub>Click **Try it as a guest** on the demo, no sign-up needed. The API runs on a free tier, so the first request after idle can take ~30 seconds.</sub>
 
-<img src="assets/demo.gif" alt="FinSight AI walkthrough: landing, dashboard, command palette, company analysis, compare, screener, news and AI chat" width="900" />
+<br />
 
-<sub>A 30-second tour recorded from the live app: guest login, ⌘K palette, company analysis, compare, screener, news, AI chat</sub>
+<img src="assets/demo.gif" alt="FinSight AI walkthrough: landing, dashboard with live index charts, dock, command palette, company analysis, compare, portfolio, screener, news and AI chat" width="900" />
+
+<sub>A 25-second tour recorded from the running app</sub>
+
+<br />
+
+<table>
+  <tr>
+    <td align="center"><b>265</b><br /><sub>NSE stocks, live</sub></td>
+    <td align="center"><b>10</b><br /><sub>pages in a floating dock</sub></td>
+    <td align="center"><b>93%</b><br /><sub>stock-detection precision &amp; recall</sub></td>
+    <td align="center"><b>23</b><br /><sub>automated tests + live AI eval</sub></td>
+    <td align="center"><b>3</b><br /><sub>guardrails on every AI answer</sub></td>
+  </tr>
+</table>
 
 </div>
 
@@ -37,26 +52,41 @@
 | **News** | Market headlines with search and filters (topic, stock, sentiment) and a sentiment estimate per story. |
 | **Portfolio & watchlist** | Add holdings and targets, see value and P&L at live prices, sector allocation and per-holding returns. |
 | **Mutual funds, SIP calculator, finance dictionary** | Fund returns from NAV history, a SIP growth calculator and a plain-English glossary. |
-| **Polish** | Command palette (⌘K), page transitions, guest mode, responsive down to phone width, keyboard-accessible, reduced-motion aware. |
+| **Interface** | A macOS-style floating **dock** (icons swell toward the cursor) instead of a sidebar, a bento dashboard with live Nifty / Sensex / Bank Nifty / USD-INR charts, an animated market ticker, command palette (⌘K, searches company names too), phone layout with a bottom tab bar, reduced-motion aware. |
+| **Multi-currency portfolio** | Mix NSE and US holdings; each row shows its native currency and totals roll up in rupees at the live USD/INR rate. |
+
+### Screens
+
+<p align="center"><img src="assets/screens/dashboard.png" alt="Dashboard: live index chart, portfolio donut, movers and news" width="100%" /></p>
+<p align="center"><sub><b>Dashboard.</b> Index tabs with real charts, portfolio value counting up, top movers and headlines.</sub></p>
 
 <table>
   <tr>
-    <td><img src="assets/screens/dashboard.png" alt="Dashboard" /></td>
-    <td><img src="assets/screens/company.png" alt="Company analysis" /></td>
+    <td width="50%"><img src="assets/screens/company.png" alt="Company page with price chart" /><br /><sub><b>Company.</b> Live quote, chart, financials, AI analysis, news.</sub></td>
+    <td width="50%"><img src="assets/screens/compare.png" alt="Compare stocks" /><br /><sub><b>Compare.</b> Up to four stocks, rebased to 0% so they line up.</sub></td>
   </tr>
   <tr>
-    <td><img src="assets/screens/compare.png" alt="Compare stocks" /></td>
-    <td><img src="assets/screens/screener.png" alt="Screener" /></td>
+    <td><img src="assets/screens/portfolio.png" alt="Portfolio with P&L and sector allocation" /><br /><sub><b>Portfolio.</b> P&amp;L per holding, sector allocation, edit in place.</sub></td>
+    <td><img src="assets/screens/screener.png" alt="Screener with quick screens" /><br /><sub><b>Screener.</b> Quick screens, saved screens, sortable fundamentals.</sub></td>
   </tr>
   <tr>
-    <td><img src="assets/screens/news.png" alt="News with filters" /></td>
-    <td><img src="assets/screens/company-hub.png" alt="Company analysis hub" /></td>
+    <td><img src="assets/screens/news.png" alt="News with filters" /><br /><sub><b>News.</b> Topic, stock and sentiment filters.</sub></td>
+    <td><img src="assets/screens/chat.png" alt="AI chat" /><br /><sub><b>AI chat.</b> Gets live data for any stock you mention; stays in finance.</sub></td>
   </tr>
   <tr>
-    <td><img src="assets/screens/ai-chat.png" alt="AI chat assistant" /></td>
-    <td><img src="assets/screens/landing.png" alt="Landing page" /></td>
+    <td><img src="assets/screens/palette.png" alt="Command palette" /><br /><sub><b>⌘K palette.</b> Jump to any page or company.</sub></td>
+    <td><img src="assets/screens/landing.png" alt="Landing page" /><br /><sub><b>Landing.</b> Same live ticker, guest login in one click.</sub></td>
   </tr>
 </table>
+
+<p align="center"><img src="assets/screens/dock.png" alt="The floating dock with the cursor hovering over an icon" width="70%" /></p>
+<p align="center"><sub><b>The dock.</b> Icons swell as the cursor approaches; the active page glows.</sub></p>
+
+<p align="center">
+  <img src="assets/screens/mobile-dashboard.png" alt="Phone: dashboard" width="240" />&nbsp;&nbsp;
+  <img src="assets/screens/mobile-portfolio.png" alt="Phone: portfolio" width="240" />
+</p>
+<p align="center"><sub><b>On a phone</b> the dock becomes a bottom tab bar with a "More" sheet.</sub></p>
 
 ---
 
@@ -110,7 +140,7 @@ flowchart LR
 finsight-frontend/   React app (pages, components, motion, lib, tests)
 finsight-backend/    Express API (controllers, services, models, middleware, tests)
 .github/workflows/   CI: lint + test + build for both apps
-assets/              screenshots used in this README
+assets/              banner, demo GIF and screenshots used in this README
 ```
 
 ---
@@ -217,3 +247,5 @@ All routes are under `/api`. Everything except auth and `GET /market/pulse` requ
 > **Disclaimer:** FinSight AI is an educational project. Nothing here is financial advice, and sentiment and AI analysis are automated estimates that can be wrong. Do your own research.
 
 Released under the [MIT License](LICENSE).
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=12,14,18&height=110&section=footer" width="100%" alt="" />
