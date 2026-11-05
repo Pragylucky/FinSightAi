@@ -9,13 +9,17 @@ const cases = require('../eval/mentionCases');
 
 // ── Guardrails ────────────────────────────────────────────────
 test('guard appends the disclaimer to investing answers the model left bare', () => {
-  assert.ok(guardChatAnswer('TCS shares trade at a PE of 28 and the stock pays a dividend.').message.endsWith(DISCLAIMER));
+  const bare = 'TCS shares trade at a PE of 28 and the stock pays a dividend. Compared with other large IT names its ROE is high, so many investors treat it as a quality holding, though a lower valuation elsewhere in the sector can look more attractive when growth is expected to pick up over the next few years.';
+  assert.ok(guardChatAnswer(bare).message.endsWith(DISCLAIMER));
   assert.ok(guardChatAnswer('Anything at all.', { grounded: true }).message.endsWith(DISCLAIMER));
 });
 
 test('guard leaves greetings and redirections without a disclaimer', () => {
   const redirect = "I focus on finance and markets, so I can't help with that. Want to look at a stock or a concept instead?";
   assert.equal(guardChatAnswer(redirect).message, redirect);
+  // A real redirect seen in production: names NSE, BSE and stock markets but is still just a redirect
+  const live = "I focus specifically on finance and financial markets, but I'd be happy to help you understand how government economic policies or the Union Budget impact Indian stock markets like the NSE and BSE!";
+  assert.equal(guardChatAnswer(live).message, live);
   assert.equal(guardChatAnswer('Haha, fair enough! What would you like to explore?').message, 'Haha, fair enough! What would you like to explore?');
 });
 

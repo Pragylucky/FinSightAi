@@ -16,9 +16,10 @@ const INVESTING = /\b(stocks?|shares?|equit(?:y|ies)|invest\w*|buy|sell|portfoli
 
 const guardChatAnswer = (text, { grounded = false } = {}) => {
   const flags = RULES.filter((r) => r.test.test(text)).map((r) => r.flag);
-  // Substantive investing talk = at least two distinct investing terms (a redirect that merely names "stocks" does not count)
+  // Substantive investing talk = a real-length answer using several distinct investing terms.
+  // A short redirect that merely names "NSE", "BSE" or "stocks" does not count.
   const terms = new Set((text.match(INVESTING) || []).map((t) => t.toLowerCase()));
-  const needsDisclaimer = grounded || flags.length > 0 || terms.size >= 2;
+  const needsDisclaimer = grounded || flags.length > 0 || (terms.size >= 3 && text.length >= 250);
   const hasDisclaimer = /not financial advice/i.test(text);
   const message = needsDisclaimer && !hasDisclaimer ? `${text.trimEnd()}\n\n${DISCLAIMER}` : text;
   return { message, flags, disclaimed: needsDisclaimer };

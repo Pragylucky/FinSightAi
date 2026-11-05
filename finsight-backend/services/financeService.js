@@ -58,6 +58,30 @@ const toISO = (v) => {
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+// ── Crumb-free fallback ───────────────────────────────────────
+// yahoo-finance2's quote/quoteSummary need a session crumb, which Yahoo often refuses to cloud
+// hosts. The public chart endpoint needs none, so it backs up price, 52-week range and volume.
+const chartMeta = async (yahooSymbol) => {
+  const response = await axios.get(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`,
+    { params: { interval: '1d', range: '5d' }, timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+  );
+  const meta = response.data?.chart?.result?.[0]?.meta;
+  const price = meta?.regularMarketPrice;
+  if (!meta || !(price > 0)) throw new Error('No price in chart response');
+  const prev = meta.previousClose ?? meta.chartPreviousClose;
+  return {
+    name: meta.longName || meta.shortName || null,
+    price,
+    change: prev ? price - prev : 0,
+    changePercent: prev ? ((price - prev) / prev) * 100 : 0,
+    high52W: num(meta.fiftyTwoWeekHigh),
+    low52W: num(meta.fiftyTwoWeekLow),
+    volume: num(meta.regularMarketVolume),
+    currency: meta.currency || 'INR',
+  };
+};
+
 // ── Live quote ────────────────────────────────────────────────
 const getStockQuote = async (symbol) => {
   const cacheKey = `QUOTE:${symbol}`;
@@ -173,6 +197,20 @@ const getCompanyProfile = async (symbol) => {
     return data;
   } catch (error) {
     console.error(`Profile fallback error for ${yahooSymbol}:`, error.message);
+  }
+
+  // Last resort: whatever the crumb-free chart endpoint offers (name, price range). Sparse, but real.
+  try {
+    const m = await chartMeta(yahooSymbol);
+    const data = buildProfile(symbol, {
+      price: { longName: m.name, currency: m.currency },
+      profile: { sector: (screenerStocks.find((x) => x.symbol === symbol) || usStocks.find((x) => x.symbol === symbol) || {}).sector },
+      summary: { fiftyTwoWeekHigh: m.high52W, fiftyTwoWeekLow: m.low52W },
+    });
+    setCache(cacheKey, data, 300);
+    return data;
+  } catch (error) {
+    console.error(`Profile chart fallback error for ${yahooSymbol}:`, error.message);
     return getStale(cacheKey);
   }
 };
@@ -450,6 +488,7 @@ module.exports = {
   yahooFinance,
   LOOSE,
   toYahooSymbol,
+  chartMeta,
   getStockQuote,
   getCompanyProfile,
   getHistoricalData,

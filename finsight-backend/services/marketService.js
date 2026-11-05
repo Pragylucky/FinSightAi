@@ -6,7 +6,7 @@
 //  - ROE / debt-to-equity / revenue growth: one `quoteSummary` per stock, 4 at a time,
 //    refreshed daily in the background. Until they arrive those columns are null (shown as "—").
 
-const { yahooFinance, LOOSE, toYahooSymbol } = require('./financeService');
+const { yahooFinance, LOOSE, toYahooSymbol, chartMeta } = require('./financeService');
 const { screenerStocks } = require('../data/screenerData');
 
 const QUOTE_REFRESH_MS = 5 * 60 * 1000;
@@ -63,6 +63,29 @@ const refreshQuotes = () => {
       } catch (error) {
         console.error('Market quote batch failed:', error.message);
       }
+    }
+
+    // Batched quotes unavailable (Yahoo refusing the session crumb from this host): fall back to
+    // per-symbol chart calls, which need no crumb. Prices and 52W range only; ratios stay empty.
+    if (!loaded) {
+      const queue = [...bySymbol.values()];
+      const worker = async () => {
+        while (queue.length) {
+          const base = queue.shift();
+          try {
+            const m = await chartMeta(toYahooSymbol(base.symbol));
+            const prev = stocks.get(base.symbol) || {};
+            stocks.set(base.symbol, {
+              ...prev, symbol: base.symbol, name: base.name, sector: base.sector,
+              price: m.price, change: m.change, changePercent: m.changePercent,
+              high52W: m.high52W, low52W: m.low52W, volume: m.volume,
+            });
+            loaded += 1;
+          } catch (error) { /* skip this symbol */ }
+        }
+      };
+      await Promise.all(Array.from({ length: 8 }, worker));
+      if (loaded) console.log('Market snapshot served by chart fallback (no crumb)');
     }
 
     if (loaded) updatedAt = new Date();
@@ -156,8 +179,15 @@ const getIndices = async () => {
     return data;
   } catch (error) {
     console.error('Index quote error:', error.message);
-    return indexCache.data; // last good values, or empty
   }
+  try {
+    const rows = await Promise.all(INDICES.map(async (i) => {
+      try { const m = await chartMeta(i.symbol); return { name: i.name, value: m.price, change: m.changePercent }; } catch { return null; }
+    }));
+    const data = rows.filter(Boolean);
+    if (data.length) indexCache = { at: Date.now(), data };
+  } catch { /* keep last good */ }
+  return indexCache.data; // last good values, or empty
 };
 
 const getOverview = async () => {
