@@ -70,12 +70,15 @@
     <td><img src="assets/screens/screener.png" alt="Screener with quick screens" /><br /><sub><b>Screener.</b> Quick screens, saved screens, sortable fundamentals.</sub></td>
   </tr>
   <tr>
-    <td><img src="assets/screens/news.png" alt="News with filters" /><br /><sub><b>News.</b> Topic, stock and sentiment filters.</sub></td>
-    <td><img src="assets/screens/chat.png" alt="AI chat" /><br /><sub><b>AI chat.</b> Gets live data for any stock you mention; stays in finance.</sub></td>
+    <td><img src="assets/screens/ai-analysis.png" alt="AI analysis tab" /><br /><sub><b>AI analysis.</b> Summary, outlook, risk score, strengths and risks, from the figures on the page.</sub></td>
+    <td><img src="assets/screens/chat.png" alt="AI chat answering a comparison, then declining an off-topic question" /><br /><sub><b>AI chat.</b> Grounded in live data (see the source line); declines off-topic questions without a pointless disclaimer.</sub></td>
   </tr>
   <tr>
+    <td><img src="assets/screens/news.png" alt="News with filters" /><br /><sub><b>News.</b> Topic, stock and sentiment filters.</sub></td>
     <td><img src="assets/screens/palette.png" alt="Command palette" /><br /><sub><b>⌘K palette.</b> Jump to any page or company.</sub></td>
-    <td><img src="assets/screens/landing.png" alt="Landing page" /><br /><sub><b>Landing.</b> Same live ticker, guest login in one click.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="assets/screens/landing.png" alt="Landing page" /><br /><sub><b>Landing.</b> Same live ticker, guest login in one click.</sub></td>
   </tr>
 </table>
 
@@ -113,6 +116,7 @@ This was built like a product, not just a codebase.
 These are the problems that were interesting to solve, not just features that were wired up.
 
 - **Resilient market-data layer.** Yahoo's response schema changes often; a strict validation error used to blank an entire company profile. Calls now run with `validateResult: false`, fall back to a lighter endpoint, and serve the **last good value from a 24-hour stale cache** instead of failing, and the app never fabricates data. When a source is down it says so.
+- **Works from a cloud host, not just my laptop.** Yahoo's session-crumb endpoints fail from some datacenter IPs, which once left the deployed ticker, movers, screener and AI analysis empty while everything worked locally. Prices, 52-week range and volume now fall back to the public chart endpoint (ratios stay empty rather than invented), and daily change is computed from the prior daily close, with a regression test.
 - **Background snapshot service.** Screener, movers, ticker and landing page are served from an in-memory snapshot of ~265 stocks: two batched quote calls every 5 minutes, plus a bounded worker pool (5 concurrent) that fetches slower fundamentals once a day. First paint is instant instead of ~265 calls per request; partial data is flagged so the UI can show progress.
 - **AI that isn't blocking and isn't made up.** Analysis lives on its own cached endpoint (6 h TTL) so a slow model call never breaks the company page; output is parsed defensively (markdown fences, extra prose) and validated; on failure it returns an error with a retry instead of a fake "Neutral" result. Chat detects stocks in the user's message and injects live data into the prompt.
 - **Auth hardened end to end.** JWT access token plus `httpOnly` refresh cookie (`SameSite=None; Secure` in production for the cross-site Vercel ↔ Render setup), refresh-interceptor that can't deadlock on auth endpoints, rate limiting per IP behind a proxy, hashed reset tokens, optional email verification via a **6-digit code** (hashed at rest, 15-minute expiry, 5-attempt cap, resend cooldown), and one-click **guest accounts** that a nightly job garbage-collects.
