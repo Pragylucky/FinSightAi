@@ -8,6 +8,7 @@ import { motion, useScroll, useSpring, useMotionValue, useTransform } from 'fram
 import { Reveal, CountUp } from '../components/motion';
 import useApi from '../lib/useApi';
 import api from '../services/api';
+import MarketTicker from '../components/common/MarketTicker';
 import { trackSpotlight, EASE } from '../lib/motion';
 
 const features = [
@@ -115,7 +116,7 @@ export default function Landing() {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-bg-primary relative overflow-x-hidden">
+    <div className="min-h-screen bg-bg-primary relative [overflow-x:clip]">
       <ScrollProgress />
       <div className="app-bg" aria-hidden="true" />
       <div className="aurora aurora-a" aria-hidden="true" />
@@ -129,6 +130,7 @@ export default function Landing() {
         transition={{ duration: 0.5, ease: EASE }}
         className="sticky top-0 z-50 border-b border-bg-border bg-bg-primary/70 backdrop-blur-md"
       >
+        <MarketTicker pub />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center shadow-lg shadow-accent-primary/20">

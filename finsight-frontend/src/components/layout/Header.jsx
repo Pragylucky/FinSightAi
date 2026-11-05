@@ -4,60 +4,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, Search, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
-import api from '../../services/api';
+import MarketTicker from '../common/MarketTicker';
 import { isMarketOpen } from '../../lib/format';
 import { motion } from 'framer-motion';
-
-const CACHE_KEY = 'finsight:ticker';
-const CACHE_MS = 5 * 60 * 1000;
-
-function readCache() {
-  try {
-    const c = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
-    if (c && Date.now() - c.at < CACHE_MS) return c.items;
-  } catch { /* ignore corrupt cache */ }
-  return null;
-}
-
-// Live indices + the biggest NSE stocks from one backend call. If it can't be fetched we render
-// nothing rather than showing made-up prices.
-function MarketTicker() {
-  const [items, setItems] = useState(() => readCache() || []);
-
-  useEffect(() => {
-    if (items.length) return undefined;
-    let cancelled = false;
-    api.market.overview()
-      .then((res) => {
-        const next = res.ticker || [];
-        if (cancelled || !next.length) return;
-        setItems(next);
-        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), items: next })); } catch { /* storage unavailable */ }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [items.length]);
-
-  if (!items.length) return <div className="h-[33px] border-b border-bg-border bg-bg-secondary/80" aria-hidden="true" />;
-
-  const doubled = [...items, ...items];
-  return (
-    <div className="bg-bg-secondary/80 border-b border-bg-border py-2 ticker-wrap" aria-label="Market ticker">
-      <div className="ticker-content gap-8">
-        {doubled.map((s, i) => (
-          <div key={i} className="flex items-center gap-2 shrink-0" aria-hidden={i >= items.length}>
-            <span className="font-mono text-xs text-text-secondary font-semibold">{s.symbol}</span>
-            <span className="font-mono text-xs text-text-primary">{s.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-            <span className={`text-xs font-mono ${s.change >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-              {s.change >= 0 ? '+' : ''}{s.change.toFixed(2)}%
-            </span>
-            <span className="text-bg-border">|</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function Header({ toggleSidebar, onSearch }) {
   const [query, setQuery] = useState('');

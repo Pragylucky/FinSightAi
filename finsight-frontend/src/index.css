@@ -100,7 +100,7 @@ body {
   display: flex;
   flex-wrap: nowrap;
   width: max-content;
-  animation: ticker 50s linear infinite;
+  animation: ticker 60s linear infinite;
 }
 .ticker-content:hover { animation-play-state: paused; }
 @keyframes ticker {
