@@ -6,7 +6,7 @@
 //  - ROE / debt-to-equity / revenue growth: one `quoteSummary` per stock, 4 at a time,
 //    refreshed daily in the background. Until they arrive those columns are null (shown as "—").
 
-const { yahooFinance, LOOSE, toYahooSymbol, chartMeta } = require('./financeService');
+const { yahooFinance, LOOSE, toYahooSymbol, chartMeta, fundamentalsLite, crumbCall } = require('./financeService');
 const { screenerStocks } = require('../data/screenerData');
 
 const QUOTE_REFRESH_MS = 5 * 60 * 1000;
@@ -36,7 +36,7 @@ const refreshQuotes = () => {
 
     for (let i = 0; i < symbols.length; i += 50) {
       try {
-        const quotes = await yahooFinance.quote(symbols.slice(i, i + 50), {}, LOOSE);
+        const quotes = await crumbCall(() => yahooFinance.quote(symbols.slice(i, i + 50), {}, LOOSE));
         for (const q of quotes) {
           const base = bySymbol.get(q.symbol);
           if (!base || !num(q.regularMarketPrice)) continue;
@@ -111,7 +111,7 @@ const refreshFundamentals = async () => {
         const s = queue.shift();
         const row = stocks.get(s.symbol);
         try {
-          const r = await yahooFinance.quoteSummary(toYahooSymbol(s.symbol), { modules: ['financialData'] }, LOOSE);
+          const r = await crumbCall(() => yahooFinance.quoteSummary(toYahooSymbol(s.symbol), { modules: ['financialData'] }, LOOSE));
           const fd = r.financialData || {};
           row.roe = num(fd.returnOnEquity) != null ? fd.returnOnEquity * 100 : null;
           row.debtEq = num(fd.debtToEquity) != null ? fd.debtToEquity / 100 : null; // Yahoo gives a percentage
@@ -119,7 +119,18 @@ const refreshFundamentals = async () => {
           row.fundamentalsAt = Date.now();
           done += 1;
         } catch (error) {
-          row.fundamentalsTried = Date.now(); // don't hammer a symbol that keeps failing
+          // No Yahoo session (common on cloud hosts): the crumb-free timeseries still gives the ratios
+          try {
+            const f = await fundamentalsLite(toYahooSymbol(s.symbol));
+            row.roe = f.roe; row.debtEq = f.debtToEquity; row.revenueGrowth = f.revenueGrowth;
+            if (row.pe == null) row.pe = f.pe;
+            if (row.pb == null) row.pb = f.pb;
+            if (row.marketCap == null && f.marketCap) { row.marketCap = f.marketCap / 1e7; row.capClass = capClass(row.marketCap); }
+            row.fundamentalsAt = Date.now();
+            done += 1;
+          } catch (e2) {
+            row.fundamentalsTried = Date.now(); // don't hammer a symbol that keeps failing
+          }
         }
         await sleep(150);
       }
@@ -170,7 +181,7 @@ const INDICES = [
 const getIndices = async () => {
   if (Date.now() - indexCache.at < 60 * 1000 && indexCache.data.length) return indexCache.data;
   try {
-    const quotes = await yahooFinance.quote(INDICES.map((i) => i.symbol), {}, LOOSE);
+    const quotes = await crumbCall(() => yahooFinance.quote(INDICES.map((i) => i.symbol), {}, LOOSE));
     const data = INDICES.map((i) => {
       const q = quotes.find((x) => x.symbol === i.symbol);
       return q && num(q.regularMarketPrice) ? { name: i.name, value: q.regularMarketPrice, change: num(q.regularMarketChangePercent) ?? 0 } : null;

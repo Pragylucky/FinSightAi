@@ -93,6 +93,75 @@ const chartMeta = async (yahooSymbol) => {
   };
 };
 
+// ── Circuit breaker for the crumb-based calls ─────────────────
+// When Yahoo refuses the session crumb every call fails slowly. After 3 failures in a row we skip
+// those calls for 3 minutes and go straight to the crumb-free fallbacks, so pages stay fast.
+let crumbFailures = 0;
+let crumbDownUntil = 0;
+const crumbCall = async (fn) => {
+  if (Date.now() < crumbDownUntil) throw new Error('Yahoo session unavailable (circuit open)');
+  try {
+    const out = await fn();
+    crumbFailures = 0;
+    return out;
+  } catch (error) {
+    crumbFailures += 1;
+    if (crumbFailures >= 3) { crumbDownUntil = Date.now() + 3 * 60 * 1000; crumbFailures = 0; }
+    throw error;
+  }
+};
+
+// Valuation and efficiency ratios from Yahoo's fundamentals-timeseries endpoint, which needs no crumb.
+// Statement amounts can be in a different currency from the share price, so only ratios are derived.
+const FUNDAMENTAL_TYPES = [
+  'trailingPeRatio', 'trailingForwardPeRatio', 'trailingPbRatio', 'trailingMarketCap',
+  'annualNetIncome', 'annualTotalRevenue', 'annualStockholdersEquity',
+  'quarterlyTotalDebt', 'quarterlyStockholdersEquity',
+].join(',');
+
+const fundamentalsLite = async (yahooSymbol) => {
+  const cacheKey = `FUNDLITE:${yahooSymbol}`;
+  const fresh = getCached(cacheKey);
+  if (fresh) return fresh;
+
+  const response = await axios.get(
+    `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(yahooSymbol)}`,
+    {
+      params: { type: FUNDAMENTAL_TYPES, period1: Math.floor(Date.now() / 1000) - 3 * 365 * 86400, period2: Math.floor(Date.now() / 1000) + 86400 },
+      timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' },
+    }
+  );
+
+  // newest-first list of values per type
+  const series = {};
+  for (const r of response.data?.timeseries?.result || []) {
+    const type = r.meta?.type?.[0];
+    series[type] = (r[type] || []).filter((x) => x?.reportedValue?.raw != null)
+      .sort((a, b) => String(b.asOfDate).localeCompare(String(a.asOfDate))).map((x) => x.reportedValue.raw);
+  }
+  const first = (t) => num(series[t]?.[0]);
+  const ratio = (a, b) => (a != null && b ? a / b : null);
+
+  const netIncome = first('annualNetIncome');
+  const equity = first('annualStockholdersEquity');
+  const revenue = first('annualTotalRevenue');
+  const prevRevenue = num(series.annualTotalRevenue?.[1]);
+
+  const data = {
+    pe: first('trailingPeRatio'),
+    forwardPE: first('trailingForwardPeRatio'),
+    pb: first('trailingPbRatio'),
+    marketCap: first('trailingMarketCap'),
+    roe: ratio(netIncome, equity) != null ? (netIncome / equity) * 100 : null,
+    netMargin: ratio(netIncome, revenue) != null ? (netIncome / revenue) * 100 : null,
+    revenueGrowth: revenue != null && prevRevenue ? ((revenue - prevRevenue) / prevRevenue) * 100 : null,
+    debtToEquity: ratio(first('quarterlyTotalDebt'), first('quarterlyStockholdersEquity')),
+  };
+  if (Object.values(data).every((v) => v == null)) throw new Error('No fundamentals in timeseries response');
+  setCache(cacheKey, data, 6 * 3600);
+  return data;
+};
+
 // ── Live quote ────────────────────────────────────────────────
 const getStockQuote = async (symbol) => {
   const cacheKey = `QUOTE:${symbol}`;
@@ -178,11 +247,11 @@ const getCompanyProfile = async (symbol) => {
   const yahooSymbol = toYahooSymbol(symbol);
 
   try {
-    const result = await yahooFinance.quoteSummary(
+    const result = await crumbCall(() => yahooFinance.quoteSummary(
       yahooSymbol,
       { modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'financialData', 'assetProfile'] },
       LOOSE
-    );
+    ));
     const data = buildProfile(symbol, {
       price: result.price, summary: result.summaryDetail, stats: result.defaultKeyStatistics,
       financial: result.financialData, profile: result.assetProfile,
@@ -195,7 +264,7 @@ const getCompanyProfile = async (symbol) => {
 
   // quoteSummary failed (Yahoo hiccup / unusual symbol): fall back to the lighter quote endpoint
   try {
-    const q = await yahooFinance.quote(yahooSymbol, {}, LOOSE);
+    const q = await crumbCall(() => yahooFinance.quote(yahooSymbol, {}, LOOSE));
     if (!q) throw new Error('empty quote');
     const data = buildProfile(symbol, {
       price: { longName: q.longName, shortName: q.shortName, marketCap: q.marketCap, currency: q.currency },
@@ -211,20 +280,30 @@ const getCompanyProfile = async (symbol) => {
     console.error(`Profile fallback error for ${yahooSymbol}:`, error.message);
   }
 
-  // Last resort: whatever the crumb-free chart endpoint offers (name, price range). Sparse, but real.
-  try {
-    const m = await chartMeta(yahooSymbol);
+  // Last resort, no Yahoo session needed: price range from the chart endpoint plus ratios from the
+  // fundamentals timeseries. Either may be missing; whatever arrives is real, the rest stays empty.
+  const [chart, fund] = await Promise.allSettled([chartMeta(yahooSymbol), fundamentalsLite(yahooSymbol)]);
+  if (chart.status === 'fulfilled' || fund.status === 'fulfilled') {
+    const m = chart.status === 'fulfilled' ? chart.value : {};
+    const f = fund.status === 'fulfilled' ? fund.value : {};
+    const roe = f.roe ?? null;
     const data = buildProfile(symbol, {
-      price: { longName: m.name, currency: m.currency },
+      price: { longName: m.name, currency: m.currency, marketCap: f.marketCap },
       profile: { sector: (screenerStocks.find((x) => x.symbol === symbol) || usStocks.find((x) => x.symbol === symbol) || {}).sector },
-      summary: { fiftyTwoWeekHigh: m.high52W, fiftyTwoWeekLow: m.low52W },
+      summary: { trailingPE: f.pe, forwardPE: f.forwardPE, fiftyTwoWeekHigh: m.high52W, fiftyTwoWeekLow: m.low52W },
+      stats: { priceToBook: f.pb, trailingEps: m.price && f.pe ? m.price / f.pe : null },
+      financial: {
+        returnOnEquity: roe != null ? roe / 100 : null,
+        profitMargins: f.netMargin != null ? f.netMargin / 100 : null,
+        revenueGrowth: f.revenueGrowth != null ? f.revenueGrowth / 100 : null,
+        debtToEquity: f.debtToEquity != null ? f.debtToEquity * 100 : null,
+      },
     });
-    setCache(cacheKey, data, 300);
+    setCache(cacheKey, data, 600);
     return data;
-  } catch (error) {
-    console.error(`Profile chart fallback error for ${yahooSymbol}:`, error.message);
-    return getStale(cacheKey);
   }
+  console.error(`Profile chart/fundamentals fallback failed for ${yahooSymbol}:`, chart.reason?.message, fund.reason?.message);
+  return getStale(cacheKey);
 };
 
 // ── Price history for charts ──────────────────────────────────
@@ -501,6 +580,8 @@ module.exports = {
   LOOSE,
   toYahooSymbol,
   chartMeta,
+  fundamentalsLite,
+  crumbCall,
   previousCloseOf,
   getStockQuote,
   getCompanyProfile,
